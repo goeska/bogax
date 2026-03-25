@@ -1,0 +1,193 @@
+from decimal import Decimal
+
+from rest_framework import serializers
+
+from master.models import Product
+
+from .models import Partner, SalesOrder, SalesOrderLine, SalesOrderLineTax
+
+
+class PartnerMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Partner
+        fields = ("id", "name", "phone")
+
+
+class PartnerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Partner
+        fields = ("id", "name", "phone", "is_customer", "is_vendor", "is_active")
+        read_only_fields = ("id", "is_active")
+
+
+class SalesOrderLineTaxReadSerializer(serializers.ModelSerializer):
+    tax_name = serializers.CharField(source="tax.name", read_only=True)
+    rate_percent = serializers.DecimalField(
+        source="tax.rate_percent",
+        max_digits=20,
+        decimal_places=2,
+        read_only=True,
+    )
+
+    class Meta:
+        model = SalesOrderLineTax
+        fields = ("id", "tax_id", "tax_name", "rate_percent")
+
+
+class SalesOrderLineReadSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_category_id = serializers.IntegerField(
+        source="product.product_category_id",
+        read_only=True,
+    )
+    line_taxes = SalesOrderLineTaxReadSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SalesOrderLine
+        fields = (
+            "id",
+            "product_id",
+            "product_category_id",
+            "product_name",
+            "quantity",
+            "unit_price",
+            "line_taxes",
+        )
+
+
+class SalesOrderLineListSerializer(serializers.ModelSerializer):
+    sales_order_id = serializers.IntegerField(source="sales_order.id", read_only=True)
+    sales_order_code = serializers.CharField(source="sales_order.code", read_only=True)
+    transaction_at = serializers.DateTimeField(source="sales_order.time_transaction", read_only=True)
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    line_taxes = SalesOrderLineTaxReadSerializer(many=True, read_only=True)
+    tax_total = serializers.SerializerMethodField()
+    line_total = serializers.SerializerMethodField()
+
+    def _line_subtotal(self, obj):
+        return round(float(obj.quantity) * float(obj.unit_price))
+
+    def get_tax_total(self, obj):
+        subtotal = self._line_subtotal(obj)
+        total = 0
+        for lt in obj.line_taxes.all():
+            r = float(lt.tax.rate_percent)
+            total += round(subtotal * (r / 100.0))
+        return total
+
+    def get_line_total(self, obj):
+        return self._line_subtotal(obj) + self.get_tax_total(obj)
+
+    class Meta:
+        model = SalesOrderLine
+        fields = (
+            "id",
+            "sales_order_id",
+            "sales_order_code",
+            "transaction_at",
+            "product_id",
+            "product_name",
+            "quantity",
+            "unit_price",
+            "line_taxes",
+            "tax_total",
+            "line_total",
+        )
+
+
+def _sales_order_amounts(order):
+    """Subtotal (lines), tax sum, grand total — mirrors POS line math (integer IDR)."""
+    sub_total = 0
+    tax_total = 0
+    for line in order.lines.filter(is_active=True):
+        sub = round(float(line.quantity) * float(line.unit_price))
+        sub_total += sub
+        for lt in line.line_taxes.all():
+            r = float(lt.tax.rate_percent)
+            tax_total += round(sub * (r / 100.0))
+    return sub_total, tax_total, sub_total + tax_total
+
+
+class SalesOrderReadSerializer(serializers.ModelSerializer):
+    customer = PartnerMiniSerializer(source="partner", read_only=True)
+    partner = PartnerMiniSerializer(read_only=True)
+    table_id = serializers.IntegerField(source="table_number_id", read_only=True, allow_null=True)
+    table_name = serializers.SerializerMethodField()
+    created_at = serializers.DateTimeField(source="update_at", read_only=True)
+    updated_at = serializers.DateTimeField(source="update_at", read_only=True)
+    subtotal = serializers.IntegerField(read_only=True)
+    tax_total = serializers.IntegerField(read_only=True)
+    grand_total = serializers.IntegerField(read_only=True)
+
+    def get_table_name(self, obj):
+        if obj.table_number_id is None:
+            return None
+        return obj.table_number.name
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        s, t, g = _sales_order_amounts(instance)
+        ret["subtotal"] = s
+        ret["tax_total"] = t
+        ret["grand_total"] = g
+        return ret
+
+    lines = serializers.SerializerMethodField()
+
+    def get_lines(self, obj):
+        qs = obj.lines.filter(is_active=True).prefetch_related("line_taxes__tax")
+        return SalesOrderLineReadSerializer(qs, many=True).data
+
+    class Meta:
+        model = SalesOrder
+        fields = (
+            "id",
+            "code",
+            "created_by_id",
+            "state",
+            "time_transaction",
+            "created_at",
+            "updated_at",
+            "subtotal",
+            "tax_total",
+            "grand_total",
+            "customer",
+            "partner",
+            "table_id",
+            "table_name",
+            "lines",
+        )
+
+
+class PosSaveDraftSerializer(serializers.Serializer):
+    transaction_at = serializers.DateTimeField()
+    product_id = serializers.IntegerField(min_value=1)
+    quantity = serializers.DecimalField(max_digits=20, decimal_places=2, min_value=Decimal("0.01"))
+    unit_price = serializers.DecimalField(max_digits=20, decimal_places=2, min_value=Decimal("0"))
+    apply_ppn = serializers.BooleanField(default=False)
+    ppn_tax_id = serializers.IntegerField(required=False, allow_null=True)
+    table = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    customer_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    customer_phone = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    partner_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    partner_phone = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    sales_order_id = serializers.IntegerField(required=False, allow_null=True)
+    sales_order_line_id = serializers.IntegerField(required=False, allow_null=True)
+    append_line = serializers.BooleanField(default=False)
+
+    def validate(self, attrs):
+        # Keep backward compatibility: if partner_* is provided, map it to customer_*.
+        if "partner_name" in attrs:
+            attrs["customer_name"] = attrs.get("partner_name", "")
+        if "partner_phone" in attrs:
+            attrs["customer_phone"] = attrs.get("partner_phone", "")
+        if attrs.get("apply_ppn") and not attrs.get("ppn_tax_id"):
+            raise serializers.ValidationError(
+                {"ppn_tax_id": "Required when apply_ppn is true."}
+            )
+        return attrs
+
+    def validate_product_id(self, value):
+        if not Product.objects.filter(pk=value, is_active=True).exists():
+            raise serializers.ValidationError("Invalid or inactive product.")
+        return value

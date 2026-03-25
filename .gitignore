@@ -1,0 +1,38 @@
+# ===== Python / Django =====
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+db.sqlite3
+
+# Django generated files
+staticfiles/
+media/
+
+# ===== Environment / secrets =====
+.env
+.env.*
+!.env.example
+
+# ===== Frontend (Vue / Vite) =====
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+
+# ===== Logs =====
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===== IDE / OS =====
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.sw?
