@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
+import '../../_template_ui/src/assets/layout/layout.scss'
 import './style.css'
 import 'primeicons/primeicons.css'
 
