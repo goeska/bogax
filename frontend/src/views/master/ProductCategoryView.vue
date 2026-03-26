@@ -106,7 +106,8 @@ onMounted(load)
     <div class="card">
       <h2 class="h2">Product Category List</h2>
       <div v-if="loading" class="muted">Loading…</div>
-      <table v-else class="table">
+      <div v-else class="table-wrap">
+      <table class="table">
         <thead>
           <tr>
             <th>Name</th>
@@ -117,7 +118,11 @@ onMounted(load)
         <tbody>
           <tr v-for="row in rows" :key="row.id">
             <td>{{ row.name }}</td>
-            <td>{{ row.is_active ? 'Yes' : 'No' }}</td>
+            <td>
+              <span class="pill" :class="row.is_active ? 'pill--yes' : 'pill--no'">
+                {{ row.is_active ? 'Yes' : 'No' }}
+              </span>
+            </td>
             <td class="col-actions">
               <button type="button" class="link-btn" @click="startEdit(row)">Edit</button>
               <button type="button" class="link-btn danger" @click="remove(row)">Delete</button>
@@ -125,6 +130,7 @@ onMounted(load)
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
   </div>
 </template>

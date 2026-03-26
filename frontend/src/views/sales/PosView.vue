@@ -948,7 +948,7 @@ async function deleteLine(line) {
   border: none;
   border-radius: 10px;
   padding: 0.55rem 1rem;
-  background: #ea580c;
+  background: var(--warn);
   color: #fff;
   font: inherit;
   font-weight: 600;
@@ -957,19 +957,20 @@ async function deleteLine(line) {
 }
 
 .btn-new-order:hover {
-  background: #c2410c;
+  background: var(--warn-hover);
 }
 
 .btn-new-order:focus-visible {
-  outline: 2px solid #9a3412;
+  outline: 2px solid var(--warn-focus);
   outline-offset: 2px;
 }
 
 .pos-section {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 1rem 1rem 1.1rem;
-  background: var(--card, var(--surface, #fff));
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
 }
 
 .pos-section--lines {
@@ -1201,6 +1202,7 @@ async function deleteLine(line) {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
 }
 
 .summary-title {
@@ -1290,7 +1292,7 @@ async function deleteLine(line) {
   border: none;
   border-radius: 10px;
   padding: 0.45rem 0.9rem;
-  background: #ea580c;
+  background: var(--warn);
   color: #fff;
   font: inherit;
   font-weight: 600;
@@ -1298,7 +1300,7 @@ async function deleteLine(line) {
 }
 
 .btn-add-item:hover {
-  background: #c2410c;
+  background: var(--warn-hover);
 }
 
 .draft-empty {
@@ -1310,32 +1312,38 @@ async function deleteLine(line) {
 }
 
 .draft-state {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   margin-left: 0.35rem;
-  padding: 0.12rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.8rem;
+  padding: 0.2rem 0.52rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
   font-weight: 650;
+  border: 1px solid transparent;
 }
 
 .draft-state--draft {
-  background: rgba(80, 110, 200, 0.16);
-  color: #2a3f9f;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
 }
 
 .draft-state--confirmed {
-  background: rgba(40, 140, 80, 0.2);
-  color: #146632;
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #bbf7d0;
 }
 
 .draft-state--void {
-  background: rgba(120, 120, 120, 0.15);
-  color: var(--muted);
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #e2e8f0;
 }
 
 .draft-state--paid {
-  background: rgba(22, 163, 74, 0.2);
+  background: #d1fae5;
   color: #166534;
+  border-color: #a7f3d0;
 }
 
 .draft-code {
@@ -1372,6 +1380,10 @@ async function deleteLine(line) {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.88rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
 }
 
 .pos-lines-table th,
@@ -1385,6 +1397,11 @@ async function deleteLine(line) {
   font-weight: 650;
   color: var(--muted);
   font-size: 0.8rem;
+  background: #fbfdff;
+}
+
+.pos-lines-table tbody tr:hover {
+  background: #f8fbff;
 }
 
 .pos-lines-table .col-num {
@@ -1402,24 +1419,6 @@ async function deleteLine(line) {
   width: 1%;
   white-space: nowrap;
   text-align: right;
-}
-
-.btn-edit {
-  font-size: 0.8rem;
-  padding: 0.28rem 0.55rem;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: var(--card, #fff);
-  cursor: pointer;
-}
-
-.btn-edit:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.btn-edit:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 .error {

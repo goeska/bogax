@@ -148,30 +148,64 @@ onMounted(async () => {
     <div class="card">
       <h2 class="h2">Project List</h2>
       <div v-if="loading" class="muted">Loading…</div>
-      <table v-else class="table">
-        <thead>
-          <tr>
-            <th>Code</th>
-            <th>Name</th>
-            <th>Partner</th>
-            <th>Active</th>
-            <th class="col-actions" />
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in rows" :key="row.id">
-            <td>{{ row.code || '—' }}</td>
-            <td>{{ row.name || '—' }}</td>
-            <td>{{ (partnerById.get(row.partner_id)?.name ?? row.partner_name) || '—' }}</td>
-            <td>{{ row.is_active ? 'Yes' : 'No' }}</td>
-            <td class="col-actions">
-              <button type="button" class="link-btn" @click="startEdit(row)">Edit</button>
-              <button type="button" class="link-btn danger" @click="remove(row)">Delete</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Name</th>
+              <th>Partner</th>
+              <th>Active</th>
+              <th class="col-actions" />
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in rows" :key="row.id">
+              <td>{{ row.code || '—' }}</td>
+              <td>{{ row.name || '—' }}</td>
+              <td>{{ (partnerById.get(row.partner_id)?.name ?? row.partner_name) || '—' }}</td>
+              <td>
+                <span class="state-pill" :class="row.is_active ? 'state-pill--active' : 'state-pill--inactive'">
+                  {{ row.is_active ? 'Yes' : 'No' }}
+                </span>
+              </td>
+              <td class="col-actions">
+                <button type="button" class="link-btn" @click="startEdit(row)">Edit</button>
+                <button type="button" class="link-btn danger" @click="remove(row)">Delete</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.table-wrap {
+  overflow-x: auto;
+}
+
+.state-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.state-pill--active {
+  color: #15803d;
+  background: #dcfce7;
+  border-color: #bbf7d0;
+}
+
+.state-pill--inactive {
+  color: #64748b;
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+</style>
 

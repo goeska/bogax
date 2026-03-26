@@ -213,33 +213,39 @@ onMounted(load)
     <div class="card">
       <h2 class="h2">Product List</h2>
       <div v-if="loading" class="muted">Loading…</div>
-      <table v-else class="table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Category</th>
-            <th>UOM</th>
-            <th>Price</th>
-            <th>Active</th>
-            <th class="col-actions" />
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in rows" :key="row.id">
-            <td>{{ row.name }}</td>
-            <td>{{ row.product_type || '—' }}</td>
-            <td>{{ categoryById.get(row.product_category_id) ?? row.product_category_id }}</td>
-            <td>{{ uomById.get(row.uom_id) ?? row.uom_id }}</td>
-            <td>{{ row.unit_price ?? '—' }}</td>
-            <td>{{ row.is_active ? 'Yes' : 'No' }}</td>
-            <td class="col-actions">
-              <button type="button" class="link-btn" @click="startEdit(row)">Edit</button>
-              <button type="button" class="link-btn danger" @click="remove(row)">Delete</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Category</th>
+              <th>UOM</th>
+              <th class="col-num">Price</th>
+              <th>Active</th>
+              <th class="col-actions" />
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in rows" :key="row.id">
+              <td>{{ row.name }}</td>
+              <td>{{ row.product_type || '—' }}</td>
+              <td>{{ categoryById.get(row.product_category_id) ?? row.product_category_id }}</td>
+              <td>{{ uomById.get(row.uom_id) ?? row.uom_id }}</td>
+              <td class="col-num">{{ row.unit_price ?? '—' }}</td>
+              <td>
+                <span class="pill" :class="row.is_active ? 'pill--yes' : 'pill--no'">
+                  {{ row.is_active ? 'Yes' : 'No' }}
+                </span>
+              </td>
+              <td class="col-actions">
+                <button type="button" class="link-btn" @click="startEdit(row)">Edit</button>
+                <button type="button" class="link-btn danger" @click="remove(row)">Delete</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>

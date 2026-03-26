@@ -198,8 +198,10 @@ onMounted(async () => {
   align-items: flex-end;
   gap: 0.75rem 1rem;
   margin-bottom: 1rem;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  padding: 0.85rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: #fbfdff;
 }
 
 .filter-field {
@@ -215,8 +217,11 @@ onMounted(async () => {
 
 .filter-input {
   min-width: 10rem;
-  padding: 0.35rem 0.5rem;
+  padding: 0.45rem 0.62rem;
   font-size: 0.9rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  background: #fff;
 }
 
 .filter-actions {
@@ -239,5 +244,6 @@ onMounted(async () => {
   align-items: center;
   gap: 0.6rem;
   justify-content: flex-start;
+  padding-top: 0.35rem;
 }
 </style>

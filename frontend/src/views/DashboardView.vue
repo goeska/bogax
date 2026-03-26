@@ -1,5 +1,4 @@
 <script setup>
-import * as echarts from 'echarts'
 import { nextTick, onMounted, onUnmounted, ref, shallowRef } from 'vue'
 import { api } from '../api/client'
 
@@ -176,6 +175,7 @@ function disposeCharts() {
 
 let roWeek
 let roMonth
+let echartsModule
 
 onMounted(async () => {
   loading.value = true
@@ -185,12 +185,15 @@ onMounted(async () => {
       fetchStacked('week', { includeTaxes: true }),
       fetchStacked('month'),
     ])
+    if (!echartsModule) {
+      echartsModule = await import('echarts')
+    }
 
     loading.value = false
     await nextTick()
 
     if (elWeek.value) {
-      chartWeek.value = echarts.init(elWeek.value, null, { renderer: 'canvas' })
+      chartWeek.value = echartsModule.init(elWeek.value, null, { renderer: 'canvas' })
       chartWeek.value.setOption(
         buildChartOption({
           title: 'Penjualan minggu ini (per produk, termasuk pajak)',
@@ -207,7 +210,7 @@ onMounted(async () => {
     }
 
     if (elMonth.value) {
-      chartMonth.value = echarts.init(elMonth.value, null, { renderer: 'canvas' })
+      chartMonth.value = echartsModule.init(elMonth.value, null, { renderer: 'canvas' })
       chartMonth.value.setOption(
         buildChartOption({
           title: 'Penjualan bulan ini (per produk)',
@@ -259,15 +262,22 @@ onUnmounted(() => {
 <style scoped>
 .dashboard-home {
   display: grid;
-  gap: 1rem;
+  gap: 1.15rem;
 }
 
 .dashboard-lead {
   margin: 0;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
 }
 
 .dashboard-loading {
-  padding: 1rem 0;
+  padding: 0.85rem 1rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fbff;
 }
 
 .dashboard-charts {
@@ -285,7 +295,12 @@ onUnmounted(() => {
 
 .dashboard-chart-card {
   min-width: 0;
-  padding: 1rem;
+  padding: 0.95rem;
+  border-radius: 14px;
+}
+
+.dashboard-chart-card :deep(canvas) {
+  border-radius: 8px;
 }
 
 .dashboard-chart {

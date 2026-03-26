@@ -163,41 +163,51 @@ onMounted(load)
     <div class="card">
       <h2 class="h2">CoA List</h2>
       <div v-if="loading" class="muted">Loading…</div>
-      <table v-else class="table">
-        <thead>
-          <tr>
-            <th>Code</th>
-            <th>Parent</th>
-            <th>Name</th>
-            <th>Active</th>
-            <th class="col-actions" />
-          </tr>
-        </thead>
-        <tbody>
-          <template v-for="p in topLevelRows" :key="p.id">
+      <div v-else class="table-wrap">
+        <table class="table">
+          <thead>
             <tr>
-              <td><strong>{{ p.code }}</strong></td>
-              <td>—</td>
-              <td><strong>{{ p.name }}</strong></td>
-              <td>{{ p.is_active ? 'Yes' : 'No' }}</td>
-              <td class="col-actions">
-                <button type="button" class="link-btn" @click="startEdit(p)">Edit</button>
-                <button type="button" class="link-btn danger" @click="remove(p)">Delete</button>
-              </td>
+              <th>Code</th>
+              <th>Parent</th>
+              <th>Name</th>
+              <th>Active</th>
+              <th class="col-actions" />
             </tr>
-            <tr v-for="c in (childrenByParent.get(p.id) || [])" :key="c.id">
-              <td style="padding-left: 1.25rem">↳ {{ c.code }}</td>
-              <td>{{ p.code }}</td>
-              <td>{{ c.name }}</td>
-              <td>{{ c.is_active ? 'Yes' : 'No' }}</td>
-              <td class="col-actions">
-                <button type="button" class="link-btn" @click="startEdit(c)">Edit</button>
-                <button type="button" class="link-btn danger" @click="remove(c)">Delete</button>
-              </td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            <template v-for="p in topLevelRows" :key="p.id">
+              <tr>
+                <td><strong>{{ p.code }}</strong></td>
+                <td>—</td>
+                <td><strong>{{ p.name }}</strong></td>
+                <td>
+                  <span class="pill" :class="p.is_active ? 'pill--yes' : 'pill--no'">
+                    {{ p.is_active ? 'Yes' : 'No' }}
+                  </span>
+                </td>
+                <td class="col-actions">
+                  <button type="button" class="link-btn" @click="startEdit(p)">Edit</button>
+                  <button type="button" class="link-btn danger" @click="remove(p)">Delete</button>
+                </td>
+              </tr>
+              <tr v-for="c in (childrenByParent.get(p.id) || [])" :key="c.id">
+                <td style="padding-left: 1.25rem">↳ {{ c.code }}</td>
+                <td>{{ p.code }}</td>
+                <td>{{ c.name }}</td>
+                <td>
+                  <span class="pill" :class="c.is_active ? 'pill--yes' : 'pill--no'">
+                    {{ c.is_active ? 'Yes' : 'No' }}
+                  </span>
+                </td>
+                <td class="col-actions">
+                  <button type="button" class="link-btn" @click="startEdit(c)">Edit</button>
+                  <button type="button" class="link-btn danger" @click="remove(c)">Delete</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>

@@ -263,8 +263,10 @@ onMounted(async () => {
   align-items: flex-end;
   gap: 0.75rem 1rem;
   margin-bottom: 1rem;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  padding: 0.85rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: #fbfdff;
 }
 
 .filter-field {
@@ -280,8 +282,11 @@ onMounted(async () => {
 
 .filter-input {
   min-width: 10rem;
-  padding: 0.35rem 0.5rem;
+  padding: 0.45rem 0.62rem;
   font-size: 0.9rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  background: #fff;
 }
 
 .filter-actions {
@@ -313,6 +318,7 @@ onMounted(async () => {
   align-items: center;
   gap: 0.6rem;
   justify-content: flex-start;
+  padding-top: 0.35rem;
 }
 
 .btn-reopen {
@@ -320,24 +326,37 @@ onMounted(async () => {
 }
 
 .so-state {
-  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.78rem;
   font-weight: 600;
+  padding: 0.22rem 0.48rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
   text-transform: capitalize;
 }
 
 .so-state--draft {
-  color: #2563eb;
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-color: #bfdbfe;
 }
 
 .so-state--confirmed {
   color: #15803d;
+  background: #dcfce7;
+  border-color: #bbf7d0;
 }
 
 .so-state--paid {
   color: #166534;
+  background: #d1fae5;
+  border-color: #a7f3d0;
 }
 
 .so-state--void {
-  color: var(--muted);
+  color: #64748b;
+  background: #f1f5f9;
+  border-color: #e2e8f0;
 }
 </style>
