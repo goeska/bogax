@@ -36,7 +36,6 @@ const confirmHint = ref('')
 const partnerNotice = ref('')
 const confirmSaving = ref(false)
 const reopenSaving = ref(false)
-const paymentSaving = ref(false)
 const appendMode = ref(true)
 const REPLACE_CONFIRM_TEXT = 'Are you sure to replace the existing items?'
 const transactionErr = ref('')
@@ -155,6 +154,7 @@ async function loadProductsForCategory(categoryIdStr) {
   try {
     products.value = await fetchAllPages('/products/', {
       product_category_id: categoryIdStr,
+      product_types: 'storable,consumable',
     })
   } catch {
     productsErr.value = 'Failed to load products for this category.'
@@ -497,34 +497,6 @@ async function reopenSale() {
   }
 }
 
-async function createPayment() {
-  confirmHint.value = ''
-  const so = draftResult.value
-  if (!so?.id || so.state !== 'confirmed') {
-    confirmHint.value = 'Payment is only available for confirmed orders.'
-    return
-  }
-  const soNumber = so.code || `#${so.id}`
-  const txDate = formatDateTimeIso(so.time_transaction || so.updated_at || so.created_at, {
-    empty: '',
-  })
-  const total = formatIdr(orderComputedTotal(so))
-  const ok = confirm(
-    `Create payment?\nSO: ${soNumber}\nTransaction date: ${txDate}\nAmount: ${total}`,
-  )
-  if (!ok) return
-  paymentSaving.value = true
-  try {
-    const { data } = await api.post(`/sales-orders/${so.id}/payment/`, {})
-    draftResult.value = data
-    confirmHint.value = `Payment recorded for ${soNumber} (${total}). Order is now paid.`
-  } catch (e) {
-    confirmHint.value = formatApiError(e)
-  } finally {
-    paymentSaving.value = false
-  }
-}
-
 function newSalesOrder() {
   confirmHint.value = ''
   saveDraftApiErr.value = ''
@@ -842,15 +814,6 @@ async function deleteLine(line) {
           @click="reopenSale"
         >
           {{ reopenSaving ? 'Reopening…' : 'Reopen' }}
-        </button>
-        <button
-          v-if="draftResult?.state === 'confirmed'"
-          type="button"
-          class="btn-primary summary-payment"
-          :disabled="paymentSaving"
-          @click="createPayment"
-        >
-          {{ paymentSaving ? 'Processing…' : 'Payment' }}
         </button>
         <p v-if="confirmHint" class="confirm-hint muted small">{{ confirmHint }}</p>
       </aside>
@@ -1288,10 +1251,6 @@ async function deleteLine(line) {
 }
 
 .summary-reopen {
-  width: 100%;
-}
-
-.summary-payment {
   width: 100%;
 }
 

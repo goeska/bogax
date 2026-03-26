@@ -21,6 +21,11 @@ const routes = [
     children: [
       { path: '', name: 'dashboard', component: () => import('../views/DashboardView.vue') },
       {
+        path: 'master/coa',
+        name: 'master-coa',
+        component: () => import('../views/master/CoaView.vue'),
+      },
+      {
         path: 'master/uom',
         name: 'master-uom',
         component: () => import('../views/master/UomView.vue'),
@@ -29,6 +34,11 @@ const routes = [
         path: 'master/partner',
         name: 'master-partner',
         component: () => import('../views/master/PartnerView.vue'),
+      },
+      {
+        path: 'master/legal-entity-type',
+        name: 'master-legal-entity-type',
+        component: () => import('../views/master/LegalEntityTypeView.vue'),
       },
       {
         path: 'master/tax',
@@ -64,6 +74,11 @@ const routes = [
         path: 'sales/pos',
         name: 'sales-pos',
         component: () => import('../views/sales/PosView.vue'),
+      },
+      {
+        path: 'sales/project',
+        name: 'sales-project',
+        component: () => import('../views/sales/ProjectView.vue'),
       },
       {
         path: 'purchase/purchase-order',
@@ -109,11 +124,6 @@ const routes = [
         path: 'admin/users',
         name: 'admin-users',
         component: () => import('../views/admin/UsersView.vue'),
-      },
-      {
-        path: 'finance/payment',
-        name: 'finance-payment',
-        component: () => import('../views/finance/PaymentView.vue'),
       },
     ],
   },

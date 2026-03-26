@@ -12,12 +12,3 @@ export function buildOrderListParams(
   if (dateTo) params.date_to = dateTo
   return params
 }
-
-/** Query params for paginated payment list. */
-export function buildPaymentListParams(page, { txType, dateFrom, dateTo }) {
-  const params = { page }
-  if (txType === 'i' || txType === 'o') params.tx_type = txType
-  if (dateFrom) params.date_from = dateFrom
-  if (dateTo) params.date_to = dateTo
-  return params
-}

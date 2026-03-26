@@ -1,11 +1,15 @@
+from django.db import IntegrityError
 from rest_framework import permissions, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.exceptions import ValidationError
 
 from core.mixins import SoftDeactivateDestroyMixin
 
-from .models import MainConfig, Product, ProductCategory, TableNumber, Tax, Uom
+from .models import Coa, LegalEntityType, MainConfig, Product, ProductCategory, TableNumber, Tax, Uom
 from .serializers import (
+    CoaSerializer,
+    LegalEntityTypeSerializer,
     MainConfigReadSerializer,
     MainConfigUpdateSerializer,
     ProductCategorySerializer,
@@ -52,6 +56,14 @@ class ProductViewSet(SoftDeactivateDestroyMixin, viewsets.ModelViewSet):
                 qs = qs.filter(product_category_id=int(cat))
             except (TypeError, ValueError):
                 pass
+        ptype = (self.request.query_params.get("product_type") or "").strip()
+        if ptype:
+            qs = qs.filter(product_type=ptype)
+        ptypes_raw = (self.request.query_params.get("product_types") or "").strip()
+        if ptypes_raw:
+            ptypes = [p.strip() for p in ptypes_raw.split(",") if p.strip()]
+            if ptypes:
+                qs = qs.filter(product_type__in=ptypes)
         return qs
 
 
@@ -60,11 +72,35 @@ class ProductCategoryViewSet(SoftDeactivateDestroyMixin, viewsets.ModelViewSet):
     serializer_class = ProductCategorySerializer
     permission_classes = (permissions.IsAuthenticated,)
 
+    def perform_create(self, serializer):
+        try:
+            return super().perform_create(serializer)
+        except IntegrityError:
+            raise ValidationError({"name": "That category name already exists."})
+
+    def perform_update(self, serializer):
+        try:
+            return super().perform_update(serializer)
+        except IntegrityError:
+            raise ValidationError({"name": "That category name already exists."})
+
 
 class TableNumberViewSet(SoftDeactivateDestroyMixin, viewsets.ModelViewSet):
     queryset = TableNumber.objects.all()
     serializer_class = TableNumberSerializer
     permission_classes = (permissions.IsAuthenticated,)
+
+    def perform_create(self, serializer):
+        try:
+            return super().perform_create(serializer)
+        except IntegrityError:
+            raise ValidationError({"name": "That table number already exists."})
+
+    def perform_update(self, serializer):
+        try:
+            return super().perform_update(serializer)
+        except IntegrityError:
+            raise ValidationError({"name": "That table number already exists."})
 
 
 class TaxViewSet(SoftDeactivateDestroyMixin, viewsets.ModelViewSet):
@@ -95,3 +131,50 @@ class UomViewSet(SoftDeactivateDestroyMixin, viewsets.ModelViewSet):
     queryset = Uom.objects.all()
     serializer_class = UomSerializer
     permission_classes = (permissions.IsAuthenticated,)
+
+    def perform_create(self, serializer):
+        try:
+            return super().perform_create(serializer)
+        except IntegrityError:
+            raise ValidationError({"name": "That UOM name already exists."})
+
+    def perform_update(self, serializer):
+        try:
+            return super().perform_update(serializer)
+        except IntegrityError:
+            raise ValidationError({"name": "That UOM name already exists."})
+
+
+class CoaViewSet(SoftDeactivateDestroyMixin, viewsets.ModelViewSet):
+    queryset = Coa.objects.select_related("parent").all()
+    serializer_class = CoaSerializer
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        parent_id = self.request.query_params.get("parent_id")
+        if parent_id is not None and str(parent_id).strip() != "":
+            try:
+                qs = qs.filter(parent_id=int(parent_id))
+            except (TypeError, ValueError):
+                pass
+        return qs
+
+
+class LegalEntityTypeViewSet(SoftDeactivateDestroyMixin, viewsets.ModelViewSet):
+    permission_classes = (permissions.IsAuthenticated,)
+    serializer_class = LegalEntityTypeSerializer
+    queryset = LegalEntityType.objects.all().order_by("code", "id")
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def perform_create(self, serializer):
+        try:
+            return super().perform_create(serializer)
+        except IntegrityError:
+            raise ValidationError({"code": "That code already exists. Please use a different one."})
+
+    def perform_update(self, serializer):
+        try:
+            return super().perform_update(serializer)
+        except IntegrityError:
+            raise ValidationError({"code": "That code already exists. Please use a different one."})

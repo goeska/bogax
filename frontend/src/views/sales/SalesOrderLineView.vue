@@ -147,7 +147,6 @@ onMounted(async () => {
             <th scope="col">Product</th>
             <th scope="col" class="col-num">Quantity</th>
             <th scope="col" class="col-num">Unit Price</th>
-            <th scope="col">Tax</th>
             <th scope="col" class="col-num">Tax Amount</th>
             <th scope="col" class="col-num">Line Total</th>
           </tr>
@@ -159,7 +158,6 @@ onMounted(async () => {
             <td>{{ row.product_name || '—' }}</td>
             <td class="col-num">{{ row.quantity }}</td>
             <td class="col-num">{{ formatIdr(row.unit_price) }}</td>
-            <td>{{ taxLabel(row) }}</td>
             <td class="col-num">{{ formatIdr(row.tax_total) }}</td>
             <td class="col-num">{{ formatIdr(row.line_total) }}</td>
           </tr>

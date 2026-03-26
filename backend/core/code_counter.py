@@ -9,6 +9,7 @@ from core.models import CodeCounter
 COUNTER_FAMILY_SALES_ORDER = "SO"
 COUNTER_FAMILY_PURCHASE_ORDER = "PO"
 COUNTER_FAMILY_RECEIVING_ORDER = "RO"
+COUNTER_FAMILY_PROJECT = "PRJ"
 
 
 def next_sequence(counter_family: str, year: int) -> int:
@@ -64,3 +65,13 @@ def allocate_receiving_order_code(received_date) -> str:
     year = local.year
     seq = next_sequence(COUNTER_FAMILY_RECEIVING_ORDER, year)
     return f"RO/{local.month:02d}-{local.year}/{seq:04d}"
+
+
+def allocate_project_code(created_at) -> str:
+    """Build ``PRJ/mm-yyyy/nnnn`` using the creation datetime."""
+    local = timezone.localtime(created_at)
+    year = local.year
+    seq = next_sequence(COUNTER_FAMILY_PROJECT, year)
+    return f"PRJ/{local.month:02d}-{local.year}/{seq:04d}"
+
+

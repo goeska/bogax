@@ -2,9 +2,13 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from django.core.exceptions import ObjectDoesNotExist
+
 from master.models import Product
 
-from .models import Partner, SalesOrder, SalesOrderLine, SalesOrderLineTax
+from master.models import LegalEntityType
+
+from .models import Partner, Project, SalesOrder, SalesOrderLine, SalesOrderLineTax
 
 
 class PartnerMiniSerializer(serializers.ModelSerializer):
@@ -14,10 +18,37 @@ class PartnerMiniSerializer(serializers.ModelSerializer):
 
 
 class PartnerSerializer(serializers.ModelSerializer):
+    legal_entity_type_id = serializers.PrimaryKeyRelatedField(
+        queryset=LegalEntityType.objects.all(),
+        source="legal_entity_type",
+        allow_null=True,
+        required=False,
+    )
+    legal_entity_type_code = serializers.CharField(source="legal_entity_type.code", read_only=True)
+    legal_entity_type_name = serializers.CharField(source="legal_entity_type.name", read_only=True)
+
+    def validate(self, attrs):
+        let = attrs.get("legal_entity_type")
+        if let is not None:
+            attrs["is_corporate"] = True
+        return attrs
+
     class Meta:
         model = Partner
-        fields = ("id", "name", "phone", "is_customer", "is_vendor", "is_active")
-        read_only_fields = ("id", "is_active")
+        fields = (
+            "id",
+            "name",
+            "phone",
+            "address",
+            "legal_entity_type_id",
+            "legal_entity_type_code",
+            "legal_entity_type_name",
+            "is_corporate",
+            "is_customer",
+            "is_vendor",
+            "is_active",
+        )
+        read_only_fields = ("id",)
 
 
 class SalesOrderLineTaxReadSerializer(serializers.ModelSerializer):
@@ -100,10 +131,25 @@ def _sales_order_amounts(order):
     sub_total = 0
     tax_total = 0
     for line in order.lines.filter(is_active=True):
-        sub = round(float(line.quantity) * float(line.unit_price))
+        try:
+            qty = float(line.quantity or 0)
+        except (TypeError, ValueError):
+            qty = 0.0
+        try:
+            price = float(line.unit_price or 0)
+        except (TypeError, ValueError):
+            price = 0.0
+        sub = round(qty * price)
         sub_total += sub
         for lt in line.line_taxes.all():
-            r = float(lt.tax.rate_percent)
+            try:
+                if not lt.tax_id:
+                    continue
+                r = float(lt.tax.rate_percent or 0)
+            except ObjectDoesNotExist:
+                continue
+            except (TypeError, ValueError, AttributeError):
+                continue
             tax_total += round(sub * (r / 100.0))
     return sub_total, tax_total, sub_total + tax_total
 
@@ -118,6 +164,7 @@ class SalesOrderReadSerializer(serializers.ModelSerializer):
     subtotal = serializers.IntegerField(read_only=True)
     tax_total = serializers.IntegerField(read_only=True)
     grand_total = serializers.IntegerField(read_only=True)
+    order_type = serializers.CharField(read_only=True)
 
     def get_table_name(self, obj):
         if obj.table_number_id is None:
@@ -145,6 +192,7 @@ class SalesOrderReadSerializer(serializers.ModelSerializer):
             "code",
             "created_by_id",
             "state",
+            "order_type",
             "time_transaction",
             "created_at",
             "updated_at",
@@ -191,3 +239,16 @@ class PosSaveDraftSerializer(serializers.Serializer):
         if not Product.objects.filter(pk=value, is_active=True).exists():
             raise serializers.ValidationError("Invalid or inactive product.")
         return value
+
+
+class ProjectSerializer(serializers.ModelSerializer):
+    partner_id = serializers.PrimaryKeyRelatedField(
+        queryset=Partner.objects.all(),
+        source="partner",
+    )
+    partner_name = serializers.CharField(source="partner.name", read_only=True)
+
+    class Meta:
+        model = Project
+        fields = ("id", "code", "name", "partner_id", "partner_name", "is_active", "update_at")
+        read_only_fields = ("id", "code", "update_at")

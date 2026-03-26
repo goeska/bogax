@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import MainConfig, Product, ProductCategory, TableNumber, Tax, Uom
+from .models import Coa, LegalEntityType, MainConfig, Product, ProductCategory, TableNumber, Tax, Uom
 
 
 class MainConfigReadSerializer(serializers.ModelSerializer):
@@ -39,6 +39,7 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "name",
+            "product_type",
             "product_category_id",
             "uom_id",
             "uom_name",
@@ -69,3 +70,43 @@ class UomSerializer(serializers.ModelSerializer):
     class Meta:
         model = Uom
         fields = ("id", "name", "is_active")
+
+
+class CoaSerializer(serializers.ModelSerializer):
+    parent_id = serializers.PrimaryKeyRelatedField(
+        queryset=Coa.objects.all(),
+        source="parent",
+        allow_null=True,
+        required=False,
+    )
+    parent_code = serializers.CharField(source="parent.code", read_only=True)
+    parent_name = serializers.CharField(source="parent.name", read_only=True)
+
+    def validate(self, attrs):
+        parent = attrs.get("parent")
+        instance = getattr(self, "instance", None)
+        if instance is not None and parent is not None and parent.pk == instance.pk:
+            raise serializers.ValidationError({"parent_id": "Parent cannot be self."})
+        if parent is not None and parent.parent_id is not None:
+            raise serializers.ValidationError(
+                {"parent_id": "Only 2 levels allowed. Parent must be a top-level CoA."}
+            )
+        return attrs
+
+    class Meta:
+        model = Coa
+        fields = (
+            "id",
+            "code",
+            "name",
+            "parent_id",
+            "parent_code",
+            "parent_name",
+            "is_active",
+        )
+
+
+class LegalEntityTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LegalEntityType
+        fields = ("id", "code", "name", "is_active")

@@ -175,9 +175,10 @@ onMounted(async () => {
         <thead>
           <tr>
             <th scope="col">Code</th>
+            <th scope="col">Type</th>
             <th scope="col">Transaction Time</th>
             <th scope="col" class="col-num">Sub Total</th>
-            <th scope="col" class="col-num">Tax</th>
+            <th scope="col" class="col-num">Tax Amount</th>
             <th scope="col" class="col-num">Total</th>
             <th scope="col">Partner</th>
             <th scope="col">Phone</th>
@@ -188,6 +189,7 @@ onMounted(async () => {
         <tbody>
           <tr v-for="row in rows" :key="row.id">
             <td>{{ row.code || '—' }}</td>
+            <td>{{ row.order_type || '—' }}</td>
             <td>{{ formatDateTimeIso(row.time_transaction) }}</td>
             <td class="col-num">{{ formatIdr(row.subtotal) }}</td>
             <td class="col-num">{{ formatIdr(row.tax_total) }}</td>

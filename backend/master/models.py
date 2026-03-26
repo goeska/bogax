@@ -32,6 +32,8 @@ class ProductCategory(models.Model):
 class Product(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=255)
+    # Existing column in DB: varchar(20) NOT NULL default 'storable'.
+    product_type = models.CharField(max_length=20, default="storable")
     product_category = models.ForeignKey(
         ProductCategory,
         on_delete=models.PROTECT,
@@ -97,3 +99,56 @@ class Uom(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class Coa(models.Model):
+    """
+    Chart of Accounts (CoA) — 2-level hierarchy (parent → child).
+
+    Stored in ``accounting_coa``.
+    """
+
+    id = models.AutoField(primary_key=True)
+    code = models.CharField(max_length=50, db_index=True)
+    name = models.CharField(max_length=255)
+    parent = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="children",
+    )
+    update_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        db_table = "accounting_coa"
+        managed = False
+        ordering = ["code", "id"]
+        indexes = [
+            models.Index(fields=["parent", "code"], name="idx_coa_parent_code"),
+            models.Index(fields=["is_active", "code"], name="idx_coa_active_code"),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["code"], name="uniq_coa_code"),
+        ]
+
+    def __str__(self) -> str:
+        if self.parent_id:
+            return f"{self.code} {self.name} (child of {self.parent_id})"
+        return f"{self.code} {self.name}"
+
+
+class LegalEntityType(models.Model):
+    id = models.AutoField(primary_key=True)
+    code = models.CharField(max_length=10, unique=True)
+    name = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "legal_entity_type"
+        managed = False
+        ordering = ["code", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.code} {self.name}"

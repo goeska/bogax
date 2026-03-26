@@ -52,11 +52,15 @@ const navGroups = [
   },
   {
     title: 'Master',
-    items: [{ to: '/master/partner', label: 'Partner', icon: '○' }],
+    items: [
+      { to: '/master/legal-entity-type', label: 'Legal Entity Type', icon: '⋄' },
+      { to: '/master/partner', label: 'Partner', icon: '○' },
+    ],
     sections: [
       {
         title: 'Reference',
         items: [
+          { to: '/master/coa', label: 'CoA', icon: '≋' },
           { to: '/master/uom', label: 'UOM', icon: '⏚' },
           { to: '/master/tax', label: 'Tax', icon: '%' },
           { to: '/master/table', label: 'Table', icon: '▦' },
@@ -76,7 +80,8 @@ const navGroups = [
     items: [
       { to: '/sales/sales-order', label: 'SO List', icon: '≡' },
       { to: '/sales/sales-order-line', label: 'SO Item List', icon: '⋯' },
-      { to: '/sales/pos', label: 'POS', icon: '¤' },
+      { to: '/sales/project', label: 'Project', icon: '▣' },
+      { to: '/sales/pos', label: 'POS Retail', icon: '¤' },
     ],
     sections: [],
   },
@@ -100,11 +105,6 @@ const navGroups = [
         ],
       },
     ],
-  },
-  {
-    title: 'Finance',
-    items: [{ to: '/finance/payment', label: 'Payment', icon: '$' }],
-    sections: [],
   },
   {
     title: 'Main Config',

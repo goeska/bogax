@@ -158,7 +158,10 @@ async function loadProductsForCategory(id) {
   }
   productsLoading.value = true
   try {
-    products.value = await fetchAllPages('/products/', { product_category_id: id })
+    products.value = await fetchAllPages('/products/', {
+      product_category_id: id,
+      product_types: 'storable,consumable',
+    })
   } catch {
     productsErr.value = 'Failed to load products.'
     products.value = []

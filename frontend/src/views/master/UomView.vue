@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api } from '../../api/client'
 import { deactivateErrorMessage, softDeactivate } from '../../api/softDeactivate'
+import { extractApiErrorText } from '../../utils/apiError'
 
 const rows = ref([])
 const loading = ref(true)
@@ -47,10 +48,13 @@ async function submit() {
     cancelEdit()
     await load()
   } catch (e) {
-    err.value =
-      e.response?.data?.detail ||
-      (typeof e.response?.data === 'object' && JSON.stringify(e.response.data)) ||
-      'Failed to save.'
+    const raw = extractApiErrorText(e.response?.data) || ''
+    const msg = String(raw).toLowerCase()
+    if (msg.includes('uom') && msg.includes('already exists')) {
+      err.value = 'That UOM name already exists. Please choose another one.'
+    } else {
+      err.value = raw || 'Could not save. Please try again.'
+    }
   } finally {
     saving.value = false
   }
@@ -76,8 +80,8 @@ onMounted(load)
     <div class="card">
       <h2 class="h2">{{ editingId != null ? 'Edit UOM' : 'Add UOM' }}</h2>
       <form class="form-row" @submit.prevent="submit">
-        <label class="field grow">
-          <span>Name</span>
+        <label class="field compact">
+          <span>Name <span class="req" aria-hidden="true">*</span></span>
           <input v-model="form.name" required maxlength="100" />
         </label>
         <label class="field check">

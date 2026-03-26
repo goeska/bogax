@@ -10,6 +10,7 @@ const loading = ref(true)
 const err = ref('')
 const form = ref({
   name: '',
+  product_type: 'storable',
   product_category_id: null,
   uom_id: null,
   is_active: true,
@@ -33,6 +34,7 @@ const uomById = computed(() => {
 function defaultForm() {
   return {
     name: '',
+    product_type: 'storable',
     product_category_id: null,
     uom_id: null,
     is_active: true,
@@ -67,6 +69,7 @@ function startEdit(row) {
   editingId.value = row.id
   form.value = {
     name: row.name,
+    product_type: row.product_type || 'storable',
     product_category_id: row.product_category_id,
     uom_id: row.uom_id,
     is_active: row.is_active,
@@ -84,6 +87,7 @@ function cancelEdit() {
 function buildPayload() {
   const payload = {
     name: form.value.name,
+    product_type: form.value.product_type || 'storable',
     product_category_id: form.value.product_category_id,
     uom_id: form.value.uom_id,
     is_active: form.value.is_active,
@@ -148,11 +152,19 @@ onMounted(load)
       <h2 class="h2">{{ editingId != null ? 'Edit Product' : 'Add Product' }}</h2>
       <form class="form-row" @submit.prevent="submit">
         <label class="field grow">
-          <span>Name</span>
+          <span>Name <span class="req" aria-hidden="true">*</span></span>
           <input v-model="form.name" required maxlength="255" />
         </label>
+        <label class="field">
+          <span>Type <span class="req" aria-hidden="true">*</span></span>
+          <select v-model="form.product_type" required>
+            <option value="storable">Storable</option>
+            <option value="consumable">Consumable</option>
+            <option value="service">Service</option>
+          </select>
+        </label>
         <label class="field grow">
-          <span>Category</span>
+          <span>Category <span class="req" aria-hidden="true">*</span></span>
           <select v-model="form.product_category_id" required>
             <option :value="null" disabled>Select…</option>
             <option v-for="c in categories" :key="c.id" :value="c.id">
@@ -161,7 +173,7 @@ onMounted(load)
           </select>
         </label>
         <label class="field grow">
-          <span>UOM</span>
+          <span>UOM <span class="req" aria-hidden="true">*</span></span>
           <select v-model="form.uom_id" required>
             <option :value="null" disabled>Select…</option>
             <option v-for="u in uoms" :key="u.id" :value="u.id">
@@ -205,6 +217,7 @@ onMounted(load)
         <thead>
           <tr>
             <th>Name</th>
+            <th>Type</th>
             <th>Category</th>
             <th>UOM</th>
             <th>Price</th>
@@ -215,6 +228,7 @@ onMounted(load)
         <tbody>
           <tr v-for="row in rows" :key="row.id">
             <td>{{ row.name }}</td>
+            <td>{{ row.product_type || '—' }}</td>
             <td>{{ categoryById.get(row.product_category_id) ?? row.product_category_id }}</td>
             <td>{{ uomById.get(row.uom_id) ?? row.uom_id }}</td>
             <td>{{ row.unit_price ?? '—' }}</td>

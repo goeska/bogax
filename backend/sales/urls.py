@@ -5,16 +5,24 @@ from .views import (
     ClearSalesDevelopmentDataView,
     PartnerViewSet,
     PosSaveDraftView,
+    ProjectViewSet,
+    SalesDashboardStackedAreaView,
     SalesOrderLineViewSet,
     SalesOrderViewSet,
 )
 
 router = DefaultRouter()
 router.register(r"partners", PartnerViewSet, basename="partner")
+router.register(r"projects", ProjectViewSet, basename="project")
 router.register(r"sales-order-lines", SalesOrderLineViewSet, basename="sales-order-line")
 router.register(r"sales-orders", SalesOrderViewSet, basename="sales-order")
 
 urlpatterns = [
+    path(
+        "sales/dashboard/stacked-area/",
+        SalesDashboardStackedAreaView.as_view(),
+        name="sales-dashboard-stacked-area",
+    ),
     path("pos/save-draft/", PosSaveDraftView.as_view(), name="pos-save-draft"),
     path(
         "sales/clear-development-data/",

@@ -308,62 +308,6 @@ select {
   padding-bottom: 0.2rem;
 }
 
-.nav-cluster {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.nav-group-inline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem 0.35rem;
-}
-
-.nav-group-label {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #64748b;
-  flex-shrink: 0;
-  margin-right: 0.15rem;
-}
-
-.nav-link--bar {
-  padding: 0.4rem 0.55rem;
-  font-size: 0.82rem;
-  white-space: nowrap;
-}
-
-button.nav-link--bar {
-  width: auto;
-  text-align: left;
-}
-
-.nav-link--bar .nav-ico {
-  width: 1.25rem;
-  min-width: 1.25rem;
-  font-size: 0.95rem;
-}
-
-.sidebar {
-  background: var(--sidebar);
-  color: #e2e8f0;
-  display: flex;
-  flex-direction: column;
-  padding: 1.25rem;
-  gap: 1rem;
-}
-
-.brand {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
-}
-
 .brand-tagline {
   font-size: 0.65rem;
   line-height: 1.35;
@@ -396,92 +340,6 @@ button.nav-link--bar {
   max-width: 22rem;
 }
 
-.nav {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  flex: 1;
-}
-
-.nav-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.nav-group-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  width: 100%;
-  margin: 0.85rem 0 0.35rem;
-  padding: 0.35rem 0.65rem;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  font: inherit;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #64748b;
-  cursor: pointer;
-  text-align: left;
-}
-
-.nav-group-toggle:hover {
-  color: #94a3b8;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.nav-chevron {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.1rem;
-  min-width: 1.1rem;
-  font-size: 0.85rem;
-  line-height: 1;
-  opacity: 0.95;
-}
-
-.nav-group-items {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding-left: 0.35rem;
-  margin-left: 0.25rem;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.nav-link {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.55rem 0.65rem;
-  border-radius: 8px;
-  color: var(--sidebar-muted);
-}
-
-.nav-link:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
-}
-
-.nav-link--active {
-  background: rgba(37, 99, 235, 0.2);
-  color: #fff;
-}
-
-button.nav-link {
-  border: none;
-  background: transparent;
-  font: inherit;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-}
-
 .nav-ico {
   display: inline-flex;
   align-items: center;
@@ -493,13 +351,6 @@ button.nav-link {
   line-height: 1;
   opacity: 0.92;
   text-align: center;
-}
-
-.sidebar-foot {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 0.75rem;
-  display: grid;
-  gap: 0.5rem;
 }
 
 .user-line {
@@ -738,6 +589,12 @@ button.nav-link {
   color: var(--muted);
 }
 
+.field .req {
+  color: var(--danger);
+  font-weight: 700;
+  margin-left: 0.1rem;
+}
+
 .field input,
 .field select {
   border: 1px solid var(--border);
@@ -746,27 +603,46 @@ button.nav-link {
   background: #fff;
 }
 
+.field input:not([type='checkbox']),
+.field select {
+  width: 100%;
+}
+
 .field.grow {
   flex: 1;
   min-width: 220px;
+}
+
+.field.compact {
+  flex: 0 0 auto;
+  min-width: 160px;
+  max-width: 240px;
+}
+
+.field.medium {
+  flex: 0 0 auto;
+  min-width: 220px;
+  max-width: 360px;
 }
 
 .field.narrow {
   min-width: 110px;
 }
 
-.check {
-  min-width: auto;
+.field.check {
+  display: flex;
   flex-direction: row;
   align-items: center;
+  justify-content: flex-start;
+  min-width: auto;
   gap: 0.5rem;
 }
 
-.check span {
+.field.check span {
   margin: 0;
 }
 
-.check input[type='checkbox'] {
+.field.check input[type='checkbox'] {
   width: 1.1rem;
   height: 1.1rem;
 }

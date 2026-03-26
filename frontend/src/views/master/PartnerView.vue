@@ -1,14 +1,37 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api } from '../../api/client'
 import { deactivateErrorMessage, softDeactivate } from '../../api/softDeactivate'
 
 const rows = ref([])
+const legalEntityTypes = ref([])
 const loading = ref(true)
 const err = ref('')
-const form = ref({ name: '', phone: '', is_customer: true, is_vendor: false })
+const form = ref({
+  name: '',
+  phone: '',
+  address: '',
+  legal_entity_type_id: null,
+  is_customer: true,
+  is_vendor: false,
+})
 const editingId = ref(null)
 const saving = ref(false)
+
+const legalEntityTypeById = computed(() => {
+  const map = new Map()
+  for (const t of legalEntityTypes.value || []) map.set(t.id, t)
+  return map
+})
+
+async function loadLegalEntityTypes() {
+  try {
+    const { data } = await api.get('/legal-entity-types/')
+    legalEntityTypes.value = data.results ?? data
+  } catch {
+    legalEntityTypes.value = []
+  }
+}
 
 async function load() {
   loading.value = true
@@ -28,6 +51,8 @@ function startEdit(row) {
   form.value = {
     name: row.name ?? '',
     phone: row.phone ?? '',
+    address: row.address ?? '',
+    legal_entity_type_id: row.legal_entity_type_id ?? null,
     is_customer: !!row.is_customer,
     is_vendor: !!row.is_vendor,
   }
@@ -36,7 +61,14 @@ function startEdit(row) {
 
 function cancelEdit() {
   editingId.value = null
-  form.value = { name: '', phone: '', is_customer: true, is_vendor: false }
+  form.value = {
+    name: '',
+    phone: '',
+    address: '',
+    legal_entity_type_id: null,
+    is_customer: true,
+    is_vendor: false,
+  }
 }
 
 async function submit() {
@@ -46,6 +78,8 @@ async function submit() {
     const payload = {
       name: form.value.name,
       phone: form.value.phone,
+      address: form.value.address,
+      legal_entity_type_id: form.value.legal_entity_type_id || null,
       is_customer: !!form.value.is_customer,
       is_vendor: !!form.value.is_vendor,
     }
@@ -78,7 +112,10 @@ async function remove(row) {
   }
 }
 
-onMounted(load)
+onMounted(async () => {
+  await loadLegalEntityTypes()
+  await load()
+})
 </script>
 
 <template>
@@ -87,12 +124,28 @@ onMounted(load)
       <h2 class="h2">{{ editingId != null ? 'Edit Partner' : 'Add Partner' }}</h2>
       <form class="form-row" @submit.prevent="submit">
         <label class="field grow">
-          <span>Name</span>
+          <span>Name <span class="req" aria-hidden="true">*</span></span>
           <input v-model="form.name" required maxlength="100" />
         </label>
-        <label class="field grow">
+        <label class="field compact">
           <span>Phone</span>
           <input v-model="form.phone" maxlength="50" />
+        </label>
+        <label class="field grow">
+          <span>Address</span>
+          <input v-model="form.address" maxlength="255" />
+        </label>
+        <label class="field medium">
+          <span>Legal Entity Type</span>
+          <select v-model="form.legal_entity_type_id">
+            <option :value="null">—</option>
+            <option v-for="t in legalEntityTypes" :key="t.id" :value="t.id">
+              {{ t.code }} — {{ t.name }}
+            </option>
+          </select>
+          <p v-if="form.legal_entity_type_id != null" class="muted small" style="margin: 0">
+            This partner will be treated as corporate.
+          </p>
         </label>
         <label class="field check">
           <span>Is Customer</span>
@@ -125,6 +178,9 @@ onMounted(load)
           <tr>
             <th>Name</th>
             <th>Phone</th>
+            <th>Address</th>
+            <th>Legal Type</th>
+            <th>Corporate</th>
             <th>Is Customer</th>
             <th>Is Vendor</th>
             <th class="col-actions" />
@@ -134,6 +190,17 @@ onMounted(load)
           <tr v-for="row in rows" :key="row.id">
             <td>{{ row.name || '—' }}</td>
             <td>{{ row.phone || '—' }}</td>
+            <td>{{ row.address || '—' }}</td>
+            <td>
+              {{
+                row.legal_entity_type_code
+                  ? row.legal_entity_type_code
+                  : row.legal_entity_type_id != null
+                    ? legalEntityTypeById.get(row.legal_entity_type_id)?.code || '—'
+                    : '—'
+              }}
+            </td>
+            <td>{{ row.is_corporate ? 'Yes' : 'No' }}</td>
             <td>{{ row.is_customer ? 'Yes' : 'No' }}</td>
             <td>{{ row.is_vendor ? 'Yes' : 'No' }}</td>
             <td class="col-actions">

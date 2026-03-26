@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api } from '../../api/client'
 import { deactivateErrorMessage, softDeactivate } from '../../api/softDeactivate'
+import { extractApiErrorText } from '../../utils/apiError'
 
 const rows = ref([])
 const loading = ref(true)
@@ -21,7 +22,7 @@ async function load() {
     const { data } = await api.get('/table-numbers/')
     rows.value = data.results ?? data
   } catch {
-    err.value = 'Failed to load table numbers.'
+    err.value = 'Could not load table numbers. Please try again.'
   } finally {
     loading.value = false
   }
@@ -69,10 +70,24 @@ async function submit() {
     if (e instanceof Error && !e.response) {
       err.value = e.message
     } else {
-      err.value =
-        e.response?.data?.detail ||
-        (typeof e.response?.data === 'object' && JSON.stringify(e.response.data)) ||
-        'Failed to save.'
+      const status = e.response?.status
+      const data = e.response?.data
+      const raw = extractApiErrorText(data) || ''
+      const msg = String(raw).toLowerCase()
+
+      const looksLikeUnique =
+        msg.includes('duplicate') ||
+        msg.includes('unique') ||
+        msg.includes('already exists') ||
+        msg.includes('ux_table_number_name_active') ||
+        msg.includes('table_number') ||
+        msg.includes('table number')
+
+      if ((status === 400 || status === 409 || status === 500) && looksLikeUnique) {
+        err.value = 'That table number already exists. Please choose another one.'
+      } else {
+        err.value = raw || 'Could not save. Please try again.'
+      }
     }
   } finally {
     saving.value = false
@@ -100,7 +115,7 @@ onMounted(load)
       <h2 class="h2">{{ editingId != null ? 'Edit Table' : 'Add Table' }}</h2>
       <form class="form-row" @submit.prevent="submit">
         <label class="field narrow">
-          <span>Name (number)</span>
+          <span>Name (number) <span class="req" aria-hidden="true">*</span></span>
           <input
             v-model="form.name"
             type="number"

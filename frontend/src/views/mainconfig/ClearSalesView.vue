@@ -43,12 +43,11 @@ async function runClear() {
     <div class="card card--danger">
       <h2 class="h2">Clear Sales</h2>
       <p class="muted lead">
-        Permanently removes all sales orders, lines, line taxes, related payments, and resets sales
-        order document codes (<code>SO/…</code>). For development and UAT only — not for production.
+        Permanently removes all sales orders, lines, line taxes, and resets sales order document
+        codes (<code>SO/…</code>). For development and UAT only — not for production.
       </p>
 
       <ol class="steps muted small">
-        <li>Delete payments where source is sales order</li>
         <li>Delete <code>sales_order_line_tax</code></li>
         <li>Delete <code>sales_order_line</code></li>
         <li>Delete <code>sales_order</code></li>

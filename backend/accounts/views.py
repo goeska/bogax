@@ -78,7 +78,6 @@ class ApiRootView(APIView):
                     "purchase_orders": f"{base}/purchase-orders/",
                     "purchase_order_lines": f"{base}/purchase-order-lines/",
                     "receiving_orders": f"{base}/receiving-orders/",
-                    "payments": f"{base}/payments/",
                 },
             }
         )

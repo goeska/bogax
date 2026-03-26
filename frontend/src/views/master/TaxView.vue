@@ -102,11 +102,11 @@ onMounted(load)
       <h2 class="h2">{{ editingId != null ? 'Edit Tax' : 'Add Tax' }}</h2>
       <form class="form-row" @submit.prevent="submit">
         <label class="field grow">
-          <span>Name</span>
+          <span>Name <span class="req" aria-hidden="true">*</span></span>
           <input v-model="form.name" required maxlength="100" />
         </label>
         <label class="field narrow">
-          <span>Rate (%)</span>
+          <span>Rate (%) <span class="req" aria-hidden="true">*</span></span>
           <input
             v-model="form.rate_percent"
             type="number"

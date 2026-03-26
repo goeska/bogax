@@ -1,5 +1,12 @@
+from datetime import datetime, timedelta
+from datetime import time as time_cls
+
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
+from django.db.models import DecimalField, F, Sum
+from django.db.models.functions import TruncDate
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -7,18 +14,18 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsAppAdministrator
-from core.code_counter import COUNTER_FAMILY_SALES_ORDER, allocate_sales_order_code
+from core.code_counter import allocate_project_code, allocate_sales_order_code
 from core.mixins import SoftDeactivateDestroyMixin
 from core.models import CodeCounter
 from core.query_params import parse_date_range_from_request
 from master.models import Product, TableNumber, Tax
-from payment.models import Payment
 
-from .models import Partner, SalesOrder, SalesOrderLine, SalesOrderLineTax
+from .models import Partner, Project, SalesOrder, SalesOrderLine, SalesOrderLineTax
 from .partner_normalization import normalize_partner_name, normalize_partner_phone
 from .serializers import (
     PartnerSerializer,
     PosSaveDraftSerializer,
+    ProjectSerializer,
     SalesOrderLineListSerializer,
     SalesOrderReadSerializer,
 )
@@ -31,6 +38,16 @@ class PartnerViewSet(SoftDeactivateDestroyMixin, viewsets.ModelViewSet):
     serializer_class = PartnerSerializer
     queryset = Partner.objects.order_by("name", "phone", "id")
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        # Keep SoftDeactivateDestroyMixin behaviour (active-only) + keep ordering.
+        qs = super().get_queryset().order_by("name", "phone", "id")
+        corp_raw = (self.request.query_params.get("is_corporate") or "").strip()
+        if corp_raw in ("1", "true", "True", "yes", "on"):
+            qs = qs.filter(is_corporate=True)
+        elif corp_raw in ("0", "false", "False", "no", "off"):
+            qs = qs.filter(is_corporate=False)
+        return qs
 
 
 class SalesOrderLineViewSet(viewsets.ReadOnlyModelViewSet):
@@ -70,6 +87,20 @@ class SalesOrderLineViewSet(viewsets.ReadOnlyModelViewSet):
         if end:
             qs = qs.filter(sales_order__time_transaction__lte=end)
         return qs
+
+
+class ProjectViewSet(SoftDeactivateDestroyMixin, viewsets.ModelViewSet):
+    """Sales project CRUD (DELETE = soft deactivate)."""
+
+    permission_classes = (permissions.IsAuthenticated,)
+    serializer_class = ProjectSerializer
+    queryset = Project.objects.select_related("partner").order_by("-update_at", "-id")
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def perform_create(self, serializer):
+        # Always generate code on create.
+        obj = serializer.save(code=allocate_project_code(timezone.now()))
+        return obj
 
 
 def _is_app_admin(user):
@@ -146,6 +177,8 @@ def _sales_order_total_amount(order: SalesOrder):
     return total
 
 
+
+
 class PosSaveDraftView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
@@ -195,6 +228,7 @@ class PosSaveDraftView(APIView):
                 table_number=table_obj,
                 time_transaction=d["transaction_at"],
                 state=SalesOrder.State.DRAFT,
+                order_type="retail",
             )
 
         product = Product.objects.get(pk=d["product_id"])
@@ -311,33 +345,6 @@ class SalesOrderViewSet(
         so.refresh_from_db()
         return Response(SalesOrderReadSerializer(so).data)
 
-    @action(detail=True, methods=["post"], url_path="payment")
-    @transaction.atomic
-    def payment(self, request, pk=None):
-        """Create incoming payment for confirmed sales order and mark as paid."""
-        so = get_object_or_404(
-            self._orders_scope().select_for_update(of=("self",)),
-            pk=pk,
-        )
-        if so.state != SalesOrder.State.CONFIRMED:
-            raise ValidationError({"detail": "Payment can only be created for confirmed orders."})
-        amount = _sales_order_total_amount(so)
-        Payment.objects.create(
-            tx_type=Payment.TxType.INCOMING,
-            source_table="sales_order",
-            source_pk=so.pk,
-            reference_code=so.code or "",
-            amount=amount,
-            currency_code="IDR",
-            transaction_at=so.time_transaction,
-            note=f"Incoming payment from Sales Order #{so.pk}",
-            created_by=request.user,
-        )
-        so.state = SalesOrder.State.PAID
-        so.save(update_fields=["state", "update_at"])
-        so.refresh_from_db()
-        return Response(SalesOrderReadSerializer(so).data, status=status.HTTP_201_CREATED)
-
     @action(detail=True, methods=["post"], url_path="delete-line")
     @transaction.atomic
     def delete_line(self, request, pk=None):
@@ -361,11 +368,213 @@ class SalesOrderViewSet(
         return Response(SalesOrderReadSerializer(so).data)
 
 
+def _calendar_week_bounds_local():
+    """Monday–Sunday of the current week in the active timezone."""
+    today = timezone.localdate()
+    monday = today - timedelta(days=today.weekday())
+    sunday = monday + timedelta(days=6)
+    return monday, sunday
+
+
+def _calendar_month_bounds_local():
+    """First and last day of the current calendar month (local date)."""
+    today = timezone.localdate()
+    first = today.replace(day=1)
+    if today.month == 12:
+        next_month = first.replace(year=today.year + 1, month=1, day=1)
+    else:
+        next_month = first.replace(month=today.month + 1, day=1)
+    last = next_month - timedelta(days=1)
+    return first, last
+
+
+def _daterange_inclusive(start_d, end_d):
+    d = start_d
+    while d <= end_d:
+        yield d
+        d += timedelta(days=1)
+
+
+def _transaction_local_date(tx):
+    """
+    Calendar date in the active timezone.
+
+    DB may still hold naive ``time_transaction`` (legacy). With ``USE_TZ``,
+    ``localtime()`` rejects naive values — treat naive as wall time in
+    ``TIME_ZONE``.
+    """
+    if tx is None:
+        return None
+    if timezone.is_naive(tx):
+        tx = timezone.make_aware(tx, timezone.get_current_timezone())
+    return timezone.localtime(tx).date()
+
+
+def _dashboard_line_total_idr(line):
+    """Line subtotal + line taxes as integer IDR (same rules as POS / line list)."""
+    q = line.quantity
+    p = line.unit_price
+    if q is None or p is None:
+        return 0
+    sub = round(float(q) * float(p))
+    tax = 0
+    for lt in line.line_taxes.all():
+        try:
+            if not lt.tax_id:
+                continue
+            r = float(lt.tax.rate_percent or 0)
+        except ObjectDoesNotExist:
+            continue
+        except (TypeError, ValueError, AttributeError):
+            continue
+        tax += round(sub * (r / 100.0))
+    return sub + tax
+
+
+def _stacked_area_subtotal_only(user, start_dt, end_dt, labels, idx_by_label):
+    tz = timezone.get_current_timezone()
+    rows = (
+        SalesOrderLine.objects.filter(
+            is_active=True,
+            sales_order__is_active=True,
+            sales_order__created_by=user,
+            sales_order__time_transaction__gte=start_dt,
+            sales_order__time_transaction__lte=end_dt,
+        )
+        .annotate(
+            day=TruncDate("sales_order__time_transaction", tzinfo=tz),
+        )
+        .values("day", "product_id", "product__name")
+        .annotate(
+            amount=Sum(
+                F("quantity") * F("unit_price"),
+                output_field=DecimalField(max_digits=30, decimal_places=2),
+            ),
+        )
+        .order_by("product_id", "day")
+    )
+
+    by_product = {}
+    for row in rows:
+        day = row["day"]
+        if day is None:
+            continue
+        lab = day.isoformat() if hasattr(day, "isoformat") else str(day)
+        if lab not in idx_by_label:
+            continue
+        pid = row["product_id"]
+        pname = row["product__name"] or f"Product #{pid}"
+        if pid not in by_product:
+            by_product[pid] = {
+                "name": pname,
+                "data": [0] * len(labels),
+            }
+        i = idx_by_label[lab]
+        amt = row["amount"] or 0
+        by_product[pid]["data"][i] += int(round(float(amt)))
+    return by_product
+
+
+def _stacked_area_with_taxes(user, start_dt, end_dt, labels, idx_by_label):
+    qs = (
+        SalesOrderLine.objects.filter(
+            is_active=True,
+            sales_order__is_active=True,
+            sales_order__created_by=user,
+            sales_order__time_transaction__gte=start_dt,
+            sales_order__time_transaction__lte=end_dt,
+        )
+        .select_related("product", "sales_order")
+        .prefetch_related("line_taxes__tax")
+    )
+    by_product = {}
+    # Do not use ``iterator()`` here: it skips ``prefetch_related`` for line taxes.
+    for line in qs:
+        tx = line.sales_order.time_transaction
+        day = _transaction_local_date(tx)
+        if day is None:
+            continue
+        lab = day.isoformat()
+        if lab not in idx_by_label:
+            continue
+        pid = line.product_id
+        try:
+            pname = line.product.name if line.product_id else f"Product #{pid}"
+        except ObjectDoesNotExist:
+            # FK broken or RelatedObjectDoesNotExist — not Product.DoesNotExist
+            pname = f"Product #{pid}"
+        if pid not in by_product:
+            by_product[pid] = {
+                "name": pname,
+                "data": [0] * len(labels),
+            }
+        i = idx_by_label[lab]
+        by_product[pid]["data"][i] += _dashboard_line_total_idr(line)
+    return by_product
+
+
+class SalesDashboardStackedAreaView(APIView):
+    """
+    Aggregated sales per calendar day and product for dashboard charts.
+
+    Query:
+    - ``period=week`` (Mon–Sun) or ``period=month`` (current month).
+    - ``include_taxes=1`` (optional): use line subtotal + line taxes (IDR int);
+      otherwise qty × unit_price only (faster SQL aggregate).
+    """
+
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request):
+        period = (request.query_params.get("period") or "").strip().lower()
+        if period == "week":
+            start_d, end_d = _calendar_week_bounds_local()
+        elif period == "month":
+            start_d, end_d = _calendar_month_bounds_local()
+        else:
+            raise ValidationError(
+                {"period": 'Expected "week" or "month".'},
+            )
+
+        raw_inc = (request.query_params.get("include_taxes") or "").strip().lower()
+        include_taxes = raw_inc in ("1", "true", "yes", "on")
+
+        tz = timezone.get_current_timezone()
+        start_dt = timezone.make_aware(datetime.combine(start_d, time_cls.min), tz)
+        end_dt = timezone.make_aware(datetime.combine(end_d, time_cls.max), tz)
+
+        labels = [d.isoformat() for d in _daterange_inclusive(start_d, end_d)]
+        idx_by_label = {lab: i for i, lab in enumerate(labels)}
+
+        if include_taxes:
+            by_product = _stacked_area_with_taxes(
+                request.user, start_dt, end_dt, labels, idx_by_label
+            )
+        else:
+            by_product = _stacked_area_subtotal_only(
+                request.user, start_dt, end_dt, labels, idx_by_label
+            )
+
+        series = [
+            {"name": by_product[pid]["name"], "data": by_product[pid]["data"]}
+            for pid in sorted(by_product.keys(), key=lambda x: (by_product[x]["name"], x))
+        ]
+
+        return Response(
+            {
+                "period": period,
+                "include_taxes": include_taxes,
+                "labels": labels,
+                "series": series,
+            }
+        )
+
+
 class ClearSalesDevelopmentDataView(APIView):
     """
     Hard-delete sales data and reset SO document codes (development / UAT).
-    Deletes in order: payment (sales_order source) → sales_order_line_tax →
-    sales_order_line → sales_order → code_counter rows for family ``SO``.
+    Deletes in order: sales_order_line_tax → sales_order_line → sales_order →
+    code_counter rows for family ``SO``.
     """
 
     permission_classes = (permissions.IsAuthenticated, IsAppAdministrator)
@@ -373,10 +582,6 @@ class ClearSalesDevelopmentDataView(APIView):
     @transaction.atomic
     def post(self, request):
         deleted = {}
-        qs_pay = Payment.objects.filter(source_table="sales_order")
-        deleted["payments"] = qs_pay.count()
-        qs_pay.delete()
-
         qs_tax = SalesOrderLineTax.objects.all()
         deleted["sales_order_line_taxes"] = qs_tax.count()
         qs_tax.delete()
