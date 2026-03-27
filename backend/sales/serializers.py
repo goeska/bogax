@@ -159,6 +159,8 @@ class SalesOrderReadSerializer(serializers.ModelSerializer):
     partner = PartnerMiniSerializer(read_only=True)
     table_id = serializers.IntegerField(source="table_number_id", read_only=True, allow_null=True)
     table_name = serializers.SerializerMethodField()
+    project_id = serializers.IntegerField(read_only=True, allow_null=True)
+    project_name = serializers.CharField(source="project.name", read_only=True)
     created_at = serializers.DateTimeField(source="update_at", read_only=True)
     updated_at = serializers.DateTimeField(source="update_at", read_only=True)
     subtotal = serializers.IntegerField(read_only=True)
@@ -203,22 +205,34 @@ class SalesOrderReadSerializer(serializers.ModelSerializer):
             "partner",
             "table_id",
             "table_name",
+            "project_id",
+            "project_name",
             "lines",
         )
 
 
 class PosSaveDraftSerializer(serializers.Serializer):
+    ORDER_TYPE_CHOICES = ("retail", "non_retail")
+
     transaction_at = serializers.DateTimeField()
     product_id = serializers.IntegerField(min_value=1)
     quantity = serializers.DecimalField(max_digits=20, decimal_places=2, min_value=Decimal("0.01"))
     unit_price = serializers.DecimalField(max_digits=20, decimal_places=2, min_value=Decimal("0"))
     apply_ppn = serializers.BooleanField(default=False)
     ppn_tax_id = serializers.IntegerField(required=False, allow_null=True)
+    tax_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        allow_empty=True,
+    )
     table = serializers.CharField(required=False, allow_blank=True, max_length=50)
     customer_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
     customer_phone = serializers.CharField(required=False, allow_blank=True, max_length=50)
     partner_name = serializers.CharField(required=False, allow_blank=True, max_length=100)
     partner_phone = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    partner_id = serializers.IntegerField(required=False, allow_null=True)
+    project_id = serializers.IntegerField(required=False, allow_null=True)
+    order_type = serializers.ChoiceField(choices=ORDER_TYPE_CHOICES, required=False)
     sales_order_id = serializers.IntegerField(required=False, allow_null=True)
     sales_order_line_id = serializers.IntegerField(required=False, allow_null=True)
     append_line = serializers.BooleanField(default=False)
@@ -229,10 +243,22 @@ class PosSaveDraftSerializer(serializers.Serializer):
             attrs["customer_name"] = attrs.get("partner_name", "")
         if "partner_phone" in attrs:
             attrs["customer_phone"] = attrs.get("partner_phone", "")
-        if attrs.get("apply_ppn") and not attrs.get("ppn_tax_id"):
-            raise serializers.ValidationError(
-                {"ppn_tax_id": "Required when apply_ppn is true."}
-            )
+        if attrs.get("apply_ppn"):
+            tax_ids = attrs.get("tax_ids") or []
+            if not tax_ids and not attrs.get("ppn_tax_id"):
+                raise serializers.ValidationError(
+                    {"tax_ids": "Select at least one tax when tax is applied."}
+                )
+        order_type = attrs.get("order_type") or "retail"
+        if order_type == "non_retail":
+            if not attrs.get("partner_id"):
+                raise serializers.ValidationError(
+                    {"partner_id": "Required when order_type is non_retail."}
+                )
+            if not attrs.get("project_id"):
+                raise serializers.ValidationError(
+                    {"project_id": "Required when order_type is non_retail."}
+                )
         return attrs
 
     def validate_product_id(self, value):

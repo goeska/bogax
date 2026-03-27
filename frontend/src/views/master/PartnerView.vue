@@ -17,12 +17,52 @@ const form = ref({
 })
 const editingId = ref(null)
 const saving = ref(false)
+const searchInput = ref('')
+const search = ref('')
+const isCorporateInput = ref('')
+const isCorporate = ref('')
 
 const legalEntityTypeById = computed(() => {
   const map = new Map()
   for (const t of legalEntityTypes.value || []) map.set(t.id, t)
   return map
 })
+
+const filteredRows = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  const corp = isCorporate.value
+  return rows.value
+    .filter((row) => {
+      if (corp === 'yes') return row.is_corporate === true
+      if (corp === 'no') return row.is_corporate === false
+      return true
+    })
+    .filter((row) => {
+    const legalCode =
+      row.legal_entity_type_code ||
+      (row.legal_entity_type_id != null
+        ? legalEntityTypeById.value.get(row.legal_entity_type_id)?.code || ''
+        : '')
+      if (!q) return true
+      return [row.name, row.phone, row.address, legalCode].some((v) =>
+        String(v || '')
+          .toLowerCase()
+          .includes(q),
+      )
+    })
+})
+
+function applySearch() {
+  search.value = searchInput.value
+  isCorporate.value = isCorporateInput.value
+}
+
+function clearSearch() {
+  searchInput.value = ''
+  search.value = ''
+  isCorporateInput.value = ''
+  isCorporate.value = ''
+}
 
 async function loadLegalEntityTypes() {
   try {
@@ -172,7 +212,29 @@ onMounted(async () => {
 
     <div class="card">
       <h2 class="h2">Partner List</h2>
+      <form class="form-row" style="margin-bottom: 0.75rem" @submit.prevent="applySearch">
+        <label class="field partner-filter-search">
+          <span>Search</span>
+          <input
+            v-model="searchInput"
+            class="partner-filter-search-input"
+            type="text"
+            placeholder="Search name, phone, address, or legal type"
+          />
+        </label>
+        <label class="field compact">
+          <span>Is Corporate</span>
+          <select v-model="isCorporateInput">
+            <option value="">All</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </label>
+        <button type="submit" class="btn-edit partner-filter-apply">Apply</button>
+        <button type="button" class="btn-ghost" @click="clearSearch">Clear</button>
+      </form>
       <div v-if="loading" class="muted">Loading…</div>
+      <div v-else-if="filteredRows.length === 0" class="muted">No matching partners.</div>
       <div v-else class="table-wrap">
       <table class="table">
         <thead>
@@ -188,7 +250,7 @@ onMounted(async () => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in rows" :key="row.id">
+          <tr v-for="row in filteredRows" :key="row.id">
             <td>{{ row.name || '—' }}</td>
             <td>{{ row.phone || '—' }}</td>
             <td>{{ row.address || '—' }}</td>
@@ -227,3 +289,22 @@ onMounted(async () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.partner-filter-apply {
+  padding: 0.62rem 1.1rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.partner-filter-search {
+  min-width: 300px;
+  max-width: 300px;
+  flex: 0 0 300px;
+}
+
+.partner-filter-search-input {
+  padding: 0.66rem 0.82rem;
+  font-size: 1rem;
+}
+</style>

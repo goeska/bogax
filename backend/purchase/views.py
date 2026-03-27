@@ -185,7 +185,7 @@ class PurchaseOrderViewSet(
         start, end = parse_date_range_from_request(self.request)
         if start and end and start > end:
             raise ValidationError(
-                {"date_range": "date_from must be on or before date_to."}
+                {"date_range": "Tanggal mulai harus sama atau sebelum tanggal akhir."}
             )
         if start:
             qs = qs.filter(time_transaction__gte=start)
@@ -267,7 +267,7 @@ class PurchaseOrderLineViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(purchase_order__code__icontains=po_code_raw)
         start, end = parse_date_range_from_request(self.request)
         if start and end and start > end:
-            raise ValidationError({"date_range": "date_from must be on or before date_to."})
+            raise ValidationError({"date_range": "Tanggal mulai harus sama atau sebelum tanggal akhir."})
         if start:
             qs = qs.filter(purchase_order__time_transaction__gte=start)
         if end:
@@ -323,7 +323,7 @@ class ReceivingOrderViewSet(
             qs = qs.filter(state=state_raw)
         start, end = parse_date_range_from_request(self.request)
         if start and end and start > end:
-            raise ValidationError({"date_range": "date_from must be on or before date_to."})
+            raise ValidationError({"date_range": "Tanggal mulai harus sama atau sebelum tanggal akhir."})
         if start:
             qs = qs.filter(received_date__gte=start)
         if end:

@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     ClearSalesDevelopmentDataView,
+    NonRetailSaveDraftView,
     PartnerViewSet,
     PosSaveDraftView,
     ProjectViewSet,
@@ -24,6 +25,11 @@ urlpatterns = [
         name="sales-dashboard-stacked-area",
     ),
     path("pos/save-draft/", PosSaveDraftView.as_view(), name="pos-save-draft"),
+    path(
+        "sales/non-retail/save-draft/",
+        NonRetailSaveDraftView.as_view(),
+        name="sales-non-retail-save-draft",
+    ),
     path(
         "sales/clear-development-data/",
         ClearSalesDevelopmentDataView.as_view(),

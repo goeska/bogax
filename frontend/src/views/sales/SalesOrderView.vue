@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '../../api/client'
 import { fetchAllPages } from '../../utils/fetchAllPages'
 import { formatDateTimeIso, formatIdr } from '../../utils/format'
@@ -8,6 +8,7 @@ import { buildOrderListParams } from '../../utils/listFilters'
 import { usePagination } from '../../utils/pagination'
 
 const router = useRouter()
+const route = useRoute()
 const rows = ref([])
 const loading = ref(true)
 const err = ref('')
@@ -26,6 +27,7 @@ const lastAppliedHadFilters = ref(false)
 function filterParams() {
   return {
     salesOrderCode: filterSalesOrderCode.value || undefined,
+    orderType: route.query.order_type || undefined,
     dateFrom: filterDateFrom.value || undefined,
     dateTo: filterDateTo.value || undefined,
   }
@@ -72,7 +74,8 @@ function clearFilters() {
 const { prevPage, nextPage } = pag.makePager(loading, load)
 
 function openInPos(row) {
-  router.push({ name: 'sales-pos', query: { orderId: String(row.id) } })
+  const targetName = route.query.order_type === 'non_retail' ? 'sales-so-form' : 'sales-pos'
+  router.push({ name: targetName, query: { orderId: String(row.id) } })
 }
 
 function canDelete(row) {
@@ -101,6 +104,9 @@ async function remove(row) {
 }
 
 async function reopen(row) {
+  const label = row.code || `#${row.id}`
+  const ok = confirm(`Reopen sales order ${label} and set it back to draft?`)
+  if (!ok) return
   reopeningId.value = row.id
   err.value = ''
   try {

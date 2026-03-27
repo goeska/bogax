@@ -96,6 +96,13 @@ class SalesOrder(models.Model):
         on_delete=models.SET_NULL,
         related_name="sales_orders",
     )
+    project = models.ForeignKey(
+        "sales.Project",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sales_orders",
+    )
     table_number = models.ForeignKey(
         TableNumber,
         null=True,

@@ -1,12 +1,13 @@
 /** Query params for paginated order lists (sales / purchase). */
 export function buildOrderListParams(
   page,
-  { productId, salesOrderCode, purchaseOrderCode, state, dateFrom, dateTo },
+  { productId, salesOrderCode, purchaseOrderCode, orderType, state, dateFrom, dateTo },
 ) {
   const params = { page }
   if (productId) params.product_id = productId
   if (salesOrderCode) params.sales_order_code = salesOrderCode
   if (purchaseOrderCode) params.purchase_order_code = purchaseOrderCode
+  if (orderType) params.order_type = orderType
   if (state) params.state = state
   if (dateFrom) params.date_from = dateFrom
   if (dateTo) params.date_to = dateTo

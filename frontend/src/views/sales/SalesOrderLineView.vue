@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { api } from '../../api/client'
 import { fetchAllPages } from '../../utils/fetchAllPages'
 import { formatDateTimeIso, formatIdr } from '../../utils/format'
@@ -7,6 +8,7 @@ import { buildOrderListParams } from '../../utils/listFilters'
 import { usePagination } from '../../utils/pagination'
 
 const rows = ref([])
+const route = useRoute()
 const loading = ref(true)
 const err = ref('')
 const pag = usePagination(25)
@@ -25,6 +27,7 @@ function filterParams() {
   return {
     salesOrderCode: filterSalesOrderCode.value.trim() || undefined,
     productId: filterProductId.value || undefined,
+    orderType: route.query.order_type || undefined,
     dateFrom: filterDateFrom.value || undefined,
     dateTo: filterDateTo.value || undefined,
   }

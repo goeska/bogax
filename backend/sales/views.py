@@ -77,10 +77,13 @@ class SalesOrderLineViewSet(viewsets.ReadOnlyModelViewSet):
         code_raw = (self.request.query_params.get("sales_order_code") or "").strip()
         if code_raw:
             qs = qs.filter(sales_order__code__icontains=code_raw)
+        order_type_raw = (self.request.query_params.get("order_type") or "").strip()
+        if order_type_raw:
+            qs = qs.filter(sales_order__order_type__iexact=order_type_raw)
         start, end = parse_date_range_from_request(self.request)
         if start and end and start > end:
             raise ValidationError(
-                {"date_range": "date_from must be on or before date_to."}
+                {"date_range": "Tanggal mulai harus sama atau sebelum tanggal akhir."}
             )
         if start:
             qs = qs.filter(sales_order__time_transaction__gte=start)
@@ -96,6 +99,17 @@ class ProjectViewSet(SoftDeactivateDestroyMixin, viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
     queryset = Project.objects.select_related("partner").order_by("-update_at", "-id")
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        qs = super().get_queryset().select_related("partner").order_by("-update_at", "-id")
+        partner_raw = self.request.query_params.get("partner_id")
+        if partner_raw not in (None, ""):
+            try:
+                pid = int(partner_raw)
+            except (TypeError, ValueError):
+                raise ValidationError({"partner_id": "Invalid integer."})
+            qs = qs.filter(partner_id=pid)
+        return qs
 
     def perform_create(self, serializer):
         # Always generate code on create.
@@ -181,17 +195,51 @@ def _sales_order_total_amount(order: SalesOrder):
 
 class PosSaveDraftView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
+    forced_order_type = None
+
+    def _resolve_order_type(self, validated_data):
+        raw = (self.forced_order_type or validated_data.get("order_type") or "retail").strip()
+        if raw not in ("retail", "non_retail"):
+            raise ValidationError({"order_type": 'Expected "retail" or "non_retail".'})
+        return raw
 
     @transaction.atomic
     def post(self, request):
         ser = PosSaveDraftSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
+        order_type = self._resolve_order_type(d)
 
-        partner, partner_existed = _upsert_partner_for_sales(
-            d.get("customer_name", ""),
-            d.get("customer_phone", ""),
-        )
+        partner_existed = False
+        partner = None
+        if d.get("partner_id"):
+            partner = Partner.objects.filter(pk=d["partner_id"], is_active=True).first()
+            if not partner:
+                raise ValidationError({"partner_id": "Partner not found or inactive."})
+        else:
+            partner, partner_existed = _upsert_partner_for_sales(
+                d.get("customer_name", ""),
+                d.get("customer_phone", ""),
+            )
+
+        project_obj = None
+        if d.get("project_id"):
+            project_obj = Project.objects.filter(pk=d["project_id"], is_active=True).first()
+            if not project_obj:
+                raise ValidationError({"project_id": "Project not found or inactive."})
+
+        if order_type == "non_retail":
+            if not partner:
+                raise ValidationError({"partner_id": "Required for non-retail orders."})
+            if not partner.is_corporate:
+                raise ValidationError({"partner_id": "Customer must be a corporate partner."})
+            if not project_obj:
+                raise ValidationError({"project_id": "Required for non-retail orders."})
+            if project_obj.partner_id != partner.id:
+                raise ValidationError(
+                    {"project_id": "Project must belong to the selected customer."}
+                )
+
         table_obj = _resolve_table(d.get("table", ""))
 
         user = request.user
@@ -216,19 +264,22 @@ class PosSaveDraftView(APIView):
             if not d.get("append_line") and not line_id:
                 so.lines.filter(is_active=True).update(is_active=False)
             so.partner = partner
+            so.project = project_obj
             so.table_number = table_obj
             so.time_transaction = d["transaction_at"]
             so.state = SalesOrder.State.DRAFT
+            so.order_type = order_type
             so.save()
         else:
             so = SalesOrder.objects.create(
                 code=allocate_sales_order_code(d["transaction_at"]),
                 created_by=user,
                 partner=partner,
+                project=project_obj,
                 table_number=table_obj,
                 time_transaction=d["transaction_at"],
                 state=SalesOrder.State.DRAFT,
-                order_type="retail",
+                order_type=order_type,
             )
 
         product = Product.objects.get(pk=d["product_id"])
@@ -249,16 +300,27 @@ class PosSaveDraftView(APIView):
                 unit_price=d["unit_price"],
             )
         if d.get("apply_ppn"):
-            tax = Tax.objects.filter(pk=d["ppn_tax_id"], is_active=True).first()
-            if not tax:
-                raise ValidationError({"ppn_tax_id": "Invalid or inactive tax."})
-            SalesOrderLineTax.objects.create(sales_order_line=line, tax=tax)
+            tax_ids = d.get("tax_ids") or []
+            if not tax_ids and d.get("ppn_tax_id"):
+                tax_ids = [d["ppn_tax_id"]]
+            taxes = list(Tax.objects.filter(pk__in=tax_ids, is_active=True))
+            found_ids = {t.id for t in taxes}
+            invalid_ids = [tid for tid in tax_ids if tid not in found_ids]
+            if invalid_ids:
+                raise ValidationError({"tax_ids": f"Invalid or inactive tax ids: {invalid_ids}"})
+            for tax in taxes:
+                SalesOrderLineTax.objects.create(sales_order_line=line, tax=tax)
 
         so.refresh_from_db()
         payload = SalesOrderReadSerializer(so).data
         if partner_existed:
             payload["customer_notice"] = "Customer already exists. Using existing data."
         return Response(payload, status=status.HTTP_200_OK)
+
+
+class NonRetailSaveDraftView(PosSaveDraftView):
+    permission_classes = (permissions.IsAuthenticated,)
+    forced_order_type = "non_retail"
 
 
 class SalesOrderViewSet(
@@ -282,7 +344,7 @@ class SalesOrderViewSet(
     def get_queryset(self):
         qs = (
             self._orders_scope()
-            .select_related("partner", "table_number", "created_by")
+            .select_related("partner", "project", "table_number", "created_by")
             .prefetch_related("lines__product", "lines__line_taxes__tax")
             .order_by("-time_transaction", "-id")
         )
@@ -296,10 +358,13 @@ class SalesOrderViewSet(
         so_code_raw = (self.request.query_params.get("sales_order_code") or "").strip()
         if so_code_raw:
             qs = qs.filter(code__icontains=so_code_raw)
+        order_type_raw = (self.request.query_params.get("order_type") or "").strip()
+        if order_type_raw:
+            qs = qs.filter(order_type__iexact=order_type_raw)
         start, end = parse_date_range_from_request(self.request)
         if start and end and start > end:
             raise ValidationError(
-                {"date_range": "date_from must be on or before date_to."}
+                {"date_range": "Tanggal mulai harus sama atau sebelum tanggal akhir."}
             )
         if start:
             qs = qs.filter(time_transaction__gte=start)

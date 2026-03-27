@@ -76,6 +76,11 @@ const routes = [
         component: () => import('../views/sales/PosView.vue'),
       },
       {
+        path: 'sales/so-form',
+        name: 'sales-so-form',
+        component: () => import('../views/sales/PosView.vue'),
+      },
+      {
         path: 'sales/project',
         name: 'sales-project',
         component: () => import('../views/sales/ProjectView.vue'),

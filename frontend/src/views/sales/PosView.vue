@@ -6,6 +6,10 @@ import { fetchAllPages } from '../../utils/fetchAllPages'
 import { formatDateTimeIso, formatIdr, formatTransactionDisplay } from '../../utils/format'
 
 const route = useRoute()
+const isNonRetail = computed(() => route.name === 'sales-so-form')
+const saveDraftEndpoint = computed(() =>
+  isNonRetail.value ? '/sales/non-retail/save-draft/' : '/pos/save-draft/',
+)
 
 const configLoading = ref(true)
 const configErr = ref('')
@@ -28,6 +32,16 @@ const transactionAt = ref(new Date())
 const tableRef = ref('')
 const partnerName = ref('')
 const partnerPhone = ref('')
+const selectedPartnerId = ref('')
+const selectedProjectId = ref('')
+const corporatePartners = ref([])
+const partnersLoading = ref(false)
+const partnerLoadErr = ref('')
+const projects = ref([])
+const projectsLoading = ref(false)
+const projectLoadErr = ref('')
+const partnerIdErr = ref('')
+const projectIdErr = ref('')
 
 const draftResult = ref(null)
 const saveDraftSaving = ref(false)
@@ -46,22 +60,37 @@ const unitPriceErr = ref('')
 const uomErr = ref('')
 
 const ppnTax = ref(null)
+const taxOptions = ref([])
 const ppnTaxLoadErr = ref('')
 const applyPpn = ref(false)
-/** When loading a draft for edit, use tax_id from line; otherwise null → use ppnTax from master. */
-const draftPpnTaxId = ref(null)
+const selectedTaxIds = ref([])
+/** When loading a draft for edit, keep selected tax ids from line. */
+const draftTaxIds = ref([])
 const skipCategoryWatch = ref(false)
 const configReady = ref(false)
 const editingLineId = ref(null)
 const lineFormLocked = ref(false)
 const isFormLocked = computed(() => Boolean(draftResult.value?.id) && lineFormLocked.value)
 
-const ppnRateFraction = computed(() => {
-  const t = ppnTax.value
-  if (!t || t.rate_percent == null || t.rate_percent === '') return 0
-  const n = Number(t.rate_percent)
-  if (!Number.isFinite(n) || n < 0) return 0
-  return n / 100
+const selectedTaxes = computed(() => {
+  if (isNonRetail.value) {
+    const selectedIds = new Set(
+      (selectedTaxIds.value || []).map((v) => Number(v)).filter((v) => Number.isFinite(v) && v > 0),
+    )
+    return taxOptions.value.filter((t) => selectedIds.has(Number(t.id)))
+  }
+  return ppnTax.value ? [ppnTax.value] : []
+})
+
+const selectedTaxRateFractions = computed(() => {
+  return selectedTaxes.value
+    .map((t) => {
+      if (!t || t.rate_percent == null || t.rate_percent === '') return 0
+      const n = Number(t.rate_percent)
+      if (!Number.isFinite(n) || n < 0) return 0
+      return n / 100
+    })
+    .filter((r) => r > 0)
 })
 
 const selectedProduct = computed(() => {
@@ -125,23 +154,28 @@ const subtotal = computed(() => {
 
 const taxAmount = computed(() => {
   if (!applyPpn.value) return 0
-  const r = ppnRateFraction.value
-  if (r <= 0) return 0
-  return Math.round(subtotal.value * r)
+  if (!selectedTaxRateFractions.value.length) return 0
+  return selectedTaxRateFractions.value.reduce((sum, r) => sum + Math.round(subtotal.value * r), 0)
 })
 
 const grandTotal = computed(() => subtotal.value + taxAmount.value)
 
 const summaryTaxLabel = computed(() => {
-  if (!applyPpn.value || !ppnTax.value) return 'PPN'
-  const name = String(ppnTax.value.name ?? '').trim()
-  const pct = ppnTax.value.rate_percent
+  if (!applyPpn.value || selectedTaxes.value.length === 0) return isNonRetail.value ? 'Taxes' : 'PPN'
+  if (isNonRetail.value) return `Taxes (${selectedTaxes.value.length})`
+  const t = selectedTaxes.value[0]
+  const name = String(t.name ?? '').trim()
+  const pct = t.rate_percent
   if (name && pct != null && pct !== '') return `${name} (${pct}%)`
   return name || 'PPN'
 })
 
 watch(ppnTax, (t) => {
-  if (!t) applyPpn.value = false
+  if (!t && !isNonRetail.value) applyPpn.value = false
+})
+
+watch(selectedTaxIds, (ids) => {
+  if (isNonRetail.value) applyPpn.value = Array.isArray(ids) && ids.length > 0
 })
 
 async function loadProductsForCategory(categoryIdStr) {
@@ -152,10 +186,14 @@ async function loadProductsForCategory(categoryIdStr) {
   }
   productsLoading.value = true
   try {
-    products.value = await fetchAllPages('/products/', {
+    const params = {
       product_category_id: categoryIdStr,
-      product_types: 'storable,consumable',
-    })
+    }
+    // Retail POS keeps product type restriction; non-retail can sell any type (including service).
+    if (!isNonRetail.value) {
+      params.product_types = 'storable,consumable'
+    }
+    products.value = await fetchAllPages('/products/', params)
   } catch {
     productsErr.value = 'Failed to load products for this category.'
     products.value = []
@@ -164,13 +202,38 @@ async function loadProductsForCategory(categoryIdStr) {
   }
 }
 
+async function loadProjectsForPartner(partnerIdStr) {
+  projectLoadErr.value = ''
+  if (!partnerIdStr) {
+    projects.value = []
+    return
+  }
+  projectsLoading.value = true
+  try {
+    projects.value = await fetchAllPages('/projects/', { partner_id: partnerIdStr })
+  } catch {
+    projectLoadErr.value = 'Failed to load projects for this customer.'
+    projects.value = []
+  } finally {
+    projectsLoading.value = false
+  }
+}
+
 watch(selectedCategoryId, async (id) => {
   if (skipCategoryWatch.value) return
-  draftPpnTaxId.value = null
+  draftTaxIds.value = []
   selectedProductId.value = ''
   products.value = []
   if (id === '' || id == null) return
   await loadProductsForCategory(id)
+})
+
+watch(selectedPartnerId, async (id) => {
+  if (!isNonRetail.value) return
+  selectedProjectId.value = ''
+  projects.value = []
+  if (!id) return
+  await loadProjectsForPartner(id)
 })
 
 onMounted(async () => {
@@ -194,12 +257,28 @@ onMounted(async () => {
     categories.value = []
   }
 
+  if (isNonRetail.value) {
+    partnerLoadErr.value = ''
+    partnersLoading.value = true
+    try {
+      corporatePartners.value = await fetchAllPages('/partners/', { is_corporate: 'true' })
+    } catch {
+      partnerLoadErr.value = 'Failed to load corporate customers.'
+      corporatePartners.value = []
+    } finally {
+      partnersLoading.value = false
+    }
+  }
+
   ppnTaxLoadErr.value = ''
   try {
-    const taxes = await fetchAllPages('/taxes/', { name_ilike: 'ppn' })
-    ppnTax.value = taxes[0] ?? null
+    const taxes = await fetchAllPages('/taxes/')
+    taxOptions.value = taxes
+    ppnTax.value = taxes.find((t) => String(t.name || '').toLowerCase().includes('ppn')) ?? null
+    if (isNonRetail.value) selectedTaxIds.value = []
   } catch {
-    ppnTaxLoadErr.value = 'Failed to load PPN tax from master.'
+    ppnTaxLoadErr.value = 'Failed to load tax data from master.'
+    taxOptions.value = []
     ppnTax.value = null
   } finally {
     configLoading.value = false
@@ -212,6 +291,10 @@ onMounted(async () => {
 function applyOrderHeaderToForm(o) {
   draftResult.value = o
   transactionAt.value = new Date(o.time_transaction)
+  if (isNonRetail.value) {
+    selectedPartnerId.value = o.partner?.id != null ? String(o.partner.id) : ''
+    selectedProjectId.value = o.project_id != null ? String(o.project_id) : ''
+  }
   if (isRestaurant.value) {
     tableRef.value = o.table_name != null ? String(o.table_name) : ''
   }
@@ -235,7 +318,20 @@ async function handleOrderRouteChange(raw) {
   saveDraftApiErr.value = ''
   try {
     const { data: o } = await api.get(`/sales-orders/${id}/`)
+    if (isNonRetail.value && o.order_type && o.order_type !== 'non_retail') {
+      saveDraftApiErr.value = 'This page only supports non-retail sales orders.'
+      newSalesOrder()
+      return
+    }
+    if (!isNonRetail.value && o.order_type && o.order_type !== 'retail') {
+      saveDraftApiErr.value = 'This page only supports retail sales orders.'
+      newSalesOrder()
+      return
+    }
     applyOrderHeaderToForm(o)
+    if (isNonRetail.value && selectedPartnerId.value) {
+      await loadProjectsForPartner(selectedPartnerId.value)
+    }
     if (o.state === 'draft') {
       startAddItem()
       lineFormLocked.value = true
@@ -253,6 +349,15 @@ watch(
   async (raw) => {
     if (!configReady.value) return
     await handleOrderRouteChange(raw)
+  },
+)
+
+watch(
+  () => route.name,
+  async () => {
+    if (!configReady.value) return
+    // POS and SO Form reuse this component; reset lock/header state when switching mode.
+    await handleOrderRouteChange(route.query.orderId)
   },
 )
 
@@ -321,6 +426,8 @@ const summaryDisplayTaxLabel = computed(() =>
 
 function clearDraftFieldErrors() {
   transactionErr.value = ''
+  partnerIdErr.value = ''
+  projectIdErr.value = ''
   productCategoryErr.value = ''
   productErr.value = ''
   quantityErr.value = ''
@@ -329,7 +436,7 @@ function clearDraftFieldErrors() {
 }
 
 function resetLineFormFields() {
-  draftPpnTaxId.value = null
+  draftTaxIds.value = []
   skipCategoryWatch.value = true
   selectedCategoryId.value = ''
   selectedProductId.value = ''
@@ -337,6 +444,7 @@ function resetLineFormFields() {
   quantity.value = 1
   unitPriceStr.value = ''
   applyPpn.value = false
+  selectedTaxIds.value = []
   nextTick(() => {
     skipCategoryWatch.value = false
   })
@@ -366,6 +474,17 @@ async function saveDraft() {
   if (!(t instanceof Date) || Number.isNaN(t.getTime())) {
     transactionErr.value = 'Time transaction is required.'
     return
+  }
+
+  if (isNonRetail.value) {
+    if (!selectedPartnerId.value) {
+      partnerIdErr.value = 'Customer is required.'
+      return
+    }
+    if (!selectedProjectId.value) {
+      projectIdErr.value = 'Project is required.'
+      return
+    }
   }
 
   if (selectedCategoryId.value === '') {
@@ -405,20 +524,29 @@ async function saveDraft() {
     return
   }
 
-  if (applyPpn.value && !ppnTax.value && draftPpnTaxId.value == null) {
-    saveDraftApiErr.value = 'PPN is checked but no PPN tax is loaded from master.'
+  if (applyPpn.value && selectedTaxes.value.length === 0 && draftTaxIds.value.length === 0) {
+    saveDraftApiErr.value = isNonRetail.value
+      ? 'Tax is selected but tax master data is missing.'
+      : 'PPN is checked but no PPN tax is loaded from master.'
     return
   }
 
-  const ppnId =
-    draftPpnTaxId.value != null ? draftPpnTaxId.value : ppnTax.value?.id
+  const taxIds =
+    draftTaxIds.value.length > 0
+      ? [...draftTaxIds.value]
+      : isNonRetail.value
+        ? (selectedTaxIds.value || []).map((v) => Number(v)).filter((v) => Number.isFinite(v) && v > 0)
+        : ppnTax.value?.id
+          ? [Number(ppnTax.value.id)]
+          : []
   const body = {
     transaction_at: t.toISOString(),
     product_id: prodId,
     quantity: qtyVal,
     unit_price: unitPriceVal,
     apply_ppn: applyPpn.value,
-    ppn_tax_id: applyPpn.value ? ppnId ?? null : null,
+    ppn_tax_id: applyPpn.value && taxIds.length > 0 ? taxIds[0] : null,
+    tax_ids: applyPpn.value ? taxIds : [],
   }
   if (draftResult.value?.id) {
     body.sales_order_id = draftResult.value.id
@@ -434,16 +562,22 @@ async function saveDraft() {
     body.partner_name = partnerName.value.trim()
     body.partner_phone = partnerPhone.value.trim()
   }
+  if (isNonRetail.value) {
+    body.partner_id = Number(selectedPartnerId.value)
+    body.project_id = Number(selectedProjectId.value)
+    body.order_type = 'non_retail'
+  }
 
   saveDraftSaving.value = true
   try {
-    const { data } = await api.post('/pos/save-draft/', body)
+    const { data } = await api.post(saveDraftEndpoint.value, body)
     draftResult.value = data
     partnerNotice.value = data?.customer_notice || ''
     const lines = data?.lines
     const lastLine = lines?.length ? lines[lines.length - 1] : null
-    const lt = lastLine?.line_taxes?.[0]
-    draftPpnTaxId.value = lt?.tax_id != null ? Number(lt.tax_id) : null
+    draftTaxIds.value = (lastLine?.line_taxes || [])
+      .map((lt) => Number(lt.tax_id))
+      .filter((v) => Number.isFinite(v) && v > 0)
     editingLineId.value = null
     lineFormLocked.value = true
   } catch (e) {
@@ -484,6 +618,9 @@ async function reopenSale() {
     confirmHint.value = 'Only confirmed orders can be reopened.'
     return
   }
+  const label = draftResult.value?.code || `#${id}`
+  const ok = confirm(`Reopen sales order ${label} and set it back to draft?`)
+  if (!ok) return
   reopenSaving.value = true
   try {
     const { data } = await api.post(`/sales-orders/${id}/reopen/`, {})
@@ -504,7 +641,7 @@ function newSalesOrder() {
   draftResult.value = null
   editingLineId.value = null
   lineFormLocked.value = false
-  draftPpnTaxId.value = null
+  draftTaxIds.value = []
   transactionAt.value = new Date()
   skipCategoryWatch.value = true
   selectedCategoryId.value = ''
@@ -513,9 +650,13 @@ function newSalesOrder() {
   quantity.value = 1
   unitPriceStr.value = ''
   applyPpn.value = false
+  selectedTaxIds.value = []
   tableRef.value = ''
   partnerName.value = ''
   partnerPhone.value = ''
+  selectedPartnerId.value = ''
+  selectedProjectId.value = ''
+  projects.value = []
   appendMode.value = true
   nextTick(() => {
     skipCategoryWatch.value = false
@@ -536,14 +677,32 @@ async function startEditLine(line) {
   unitPriceStr.value = line.unit_price != null ? String(line.unit_price) : ''
   const taxes = line.line_taxes
   applyPpn.value = Boolean(taxes?.length)
-  draftPpnTaxId.value =
-    taxes?.length && taxes[0]?.tax_id != null ? Number(taxes[0].tax_id) : null
+  if (isNonRetail.value) {
+    selectedTaxIds.value = (taxes || [])
+      .map((lt) => String(lt.tax_id))
+      .filter((v) => v && v !== 'undefined' && v !== 'null')
+  }
+  draftTaxIds.value = (taxes || [])
+    .map((lt) => Number(lt.tax_id))
+    .filter((v) => Number.isFinite(v) && v > 0)
   editingLineId.value = line.id
   lineFormLocked.value = false
   skipCategoryWatch.value = false
 }
 
-function startAddItem() {
+async function startAddItem() {
+  if (isNonRetail.value && draftResult.value) {
+    const partnerId = draftResult.value.partner?.id
+    const projectId = draftResult.value.project_id
+    if (partnerId != null) {
+      selectedPartnerId.value = String(partnerId)
+      // Keep project options in sync with selected customer.
+      await loadProjectsForPartner(selectedPartnerId.value)
+    }
+    if (projectId != null) {
+      selectedProjectId.value = String(projectId)
+    }
+  }
   editingLineId.value = null
   lineFormLocked.value = false
   resetLineFormFields()
@@ -575,7 +734,7 @@ async function deleteLine(line) {
       <div class="card pos-form-card">
         <div class="pos-form-header">
           <div class="pos-form-header-top">
-            <h2 class="h2">Point of Sale</h2>
+            <h2 class="h2">{{ isNonRetail ? 'Sales Order Form (Non Retail)' : 'Point of Sale' }}</h2>
             <button type="button" class="btn-new-order" @click="newSalesOrder">
               New Sales Order
             </button>
@@ -591,7 +750,7 @@ async function deleteLine(line) {
           <div class="pos-form-fields stack-tight">
             <section class="pos-section pos-section--header" aria-labelledby="pos-header-title">
               <h3 id="pos-header-title" class="pos-section-title">Header sales order</h3>
-              <div class="pos-header-grid">
+              <div class="pos-header-grid" :class="{ 'pos-header-grid--non-retail': isNonRetail }">
                 <label class="field grow pos-header-time">
                   <span>Time transaction <abbr class="req" title="Required">*</abbr></span>
                   <input
@@ -604,7 +763,47 @@ async function deleteLine(line) {
                     :value="formatTransactionDisplay(transactionAt)"
                   />
                 </label>
-                <template v-if="isCustomerMaintained">
+                <template v-if="isNonRetail">
+                  <label class="field grow pos-header-customer">
+                    <span>Customer <abbr class="req" title="Required">*</abbr></span>
+                    <select
+                      v-model="selectedPartnerId"
+                      required
+                      aria-required="true"
+                      :disabled="isFormLocked || partnersLoading"
+                    >
+                      <option value="" disabled>
+                        {{ partnersLoading ? 'Loading…' : 'Select corporate customer' }}
+                      </option>
+                      <option v-for="p in corporatePartners" :key="p.id" :value="String(p.id)">
+                        {{ p.name || `#${p.id}` }}
+                      </option>
+                    </select>
+                  </label>
+                  <label class="field grow pos-header-project">
+                    <span>Project <abbr class="req" title="Required">*</abbr></span>
+                    <select
+                      v-model="selectedProjectId"
+                      required
+                      aria-required="true"
+                      :disabled="isFormLocked || !selectedPartnerId || projectsLoading"
+                    >
+                      <option value="" disabled>
+                        {{
+                          !selectedPartnerId
+                            ? 'Select customer first'
+                            : projectsLoading
+                              ? 'Loading…'
+                              : 'Select project'
+                        }}
+                      </option>
+                      <option v-for="p in projects" :key="p.id" :value="String(p.id)">
+                        {{ p.name }}
+                      </option>
+                    </select>
+                  </label>
+                </template>
+                <template v-else-if="isCustomerMaintained">
                   <label class="field grow">
                     <span>Partner name</span>
                     <input
@@ -629,7 +828,7 @@ async function deleteLine(line) {
                     {{ partnerNotice }}
                   </p>
                 </template>
-                <label v-if="isRestaurant" class="field grow pos-header-table">
+                <label v-if="isRestaurant && !isNonRetail" class="field grow pos-header-table">
                   <span>Table <span class="optional-hint">(optional)</span></span>
                   <input
                     v-model="tableRef"
@@ -640,12 +839,16 @@ async function deleteLine(line) {
                   />
                 </label>
               </div>
+              <p v-if="partnerLoadErr" class="error field-error">{{ partnerLoadErr }}</p>
+              <p v-if="projectLoadErr" class="error field-error">{{ projectLoadErr }}</p>
+              <p v-if="partnerIdErr" class="error field-error">{{ partnerIdErr }}</p>
+              <p v-if="projectIdErr" class="error field-error">{{ projectIdErr }}</p>
               <p v-if="transactionErr" class="error field-error">{{ transactionErr }}</p>
             </section>
 
             <section class="pos-section pos-section--lines" aria-labelledby="pos-lines-title">
               <h3 id="pos-lines-title" class="pos-section-title">Line item &amp; tax</h3>
-              <div class="pos-catalog-grid">
+              <div class="pos-catalog-grid" :class="{ 'pos-catalog-grid--non-retail': isNonRetail }">
                 <label class="field grow pos-grid-cat">
                   <span>Product category <abbr class="req" title="Required">*</abbr></span>
                   <select
@@ -716,7 +919,7 @@ async function deleteLine(line) {
                         :disabled="isFormLocked || !selectedProductId"
                       />
                     </label>
-                    <label class="field pos-check-ppn">
+                    <label v-if="!isNonRetail" class="field pos-check-ppn">
                       <span>PPN</span>
                       <input
                         v-model="applyPpn"
@@ -727,7 +930,26 @@ async function deleteLine(line) {
                     </label>
                   </div>
                 </div>
-                <div class="pos-grid-spacer" aria-hidden="true" />
+                <div v-if="isNonRetail" class="field pos-tax-row">
+                  <span>Taxes</span>
+                  <div class="tax-checkbox-list" :aria-disabled="isFormLocked || !selectedProductId">
+                    <label
+                      v-for="t in taxOptions"
+                      :key="t.id"
+                      class="tax-checkbox-item"
+                    >
+                      <input
+                        v-model="selectedTaxIds"
+                        type="checkbox"
+                        :value="String(t.id)"
+                        :disabled="isFormLocked || !selectedProductId || taxOptions.length === 0"
+                      />
+                      <span>{{ t.name }} ({{ t.rate_percent }}%)</span>
+                    </label>
+                    <span v-if="taxOptions.length === 0" class="muted small">No taxes found.</span>
+                  </div>
+                </div>
+                <div v-if="!isNonRetail" class="pos-grid-spacer" aria-hidden="true" />
               </div>
               <p v-if="productsErr" class="error field-error">{{ productsErr }}</p>
               <p v-if="productCategoryErr" class="error field-error">{{ productCategoryErr }}</p>
@@ -991,6 +1213,29 @@ async function deleteLine(line) {
   align-items: end;
 }
 
+.pos-header-grid .field {
+  min-width: 0;
+}
+
+.pos-header-grid select,
+.pos-header-grid input {
+  width: 100%;
+}
+
+.pos-header-customer {
+  grid-column: 1;
+}
+
+.pos-header-project {
+  grid-column: 2;
+}
+
+.pos-header-grid--non-retail .pos-header-customer,
+.pos-header-grid--non-retail .pos-header-project {
+  grid-column: auto;
+  max-width: 100%;
+}
+
 .pos-customer-notice {
   grid-column: 1 / -1;
   margin: -0.2rem 0 0;
@@ -999,6 +1244,13 @@ async function deleteLine(line) {
 .pos-header-time {
   grid-column: 1 / -1;
   max-width: min(22rem, 100%);
+}
+
+@media (max-width: 640px) {
+  .pos-header-customer,
+  .pos-header-project {
+    grid-column: 1 / -1;
+  }
 }
 
 .pos-catalog-grid {
@@ -1106,9 +1358,62 @@ async function deleteLine(line) {
   align-self: flex-start;
 }
 
+.pos-inline-tax {
+  width: 100%;
+  min-width: 0;
+}
+
+.tax-checkbox-list {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.tax-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+}
+
+.tax-checkbox-item input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+}
+
 .pos-grid-spacer {
   grid-column: 2;
   grid-row: 2;
+}
+
+.pos-catalog-grid--non-retail .pos-grid-qty-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.35fr);
+  grid-template-rows: auto;
+}
+
+.pos-catalog-grid--non-retail .pos-inline-qty {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.pos-catalog-grid--non-retail .pos-inline-uom {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.pos-catalog-grid--non-retail .pos-price-ppn-row {
+  grid-column: 3;
+  grid-row: 1;
+  display: block;
+}
+
+.pos-catalog-grid--non-retail .pos-tax-row {
+  grid-column: 1 / -1;
+  grid-row: 3;
 }
 
 @media (max-width: 640px) {

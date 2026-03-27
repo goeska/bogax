@@ -10,6 +10,8 @@ const partnersLoading = ref(false)
 const err = ref('')
 const saving = ref(false)
 const editingId = ref(null)
+const searchInput = ref('')
+const search = ref('')
 
 const form = ref({
   name: '',
@@ -22,6 +24,28 @@ const partnerById = computed(() => {
   for (const p of partners.value || []) map.set(p.id, p)
   return map
 })
+
+const filteredRows = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  if (!q) return rows.value
+  return rows.value.filter((row) => {
+    const partnerName = partnerById.value.get(row.partner_id)?.name ?? row.partner_name ?? ''
+    return [row.code, row.name, partnerName].some((v) =>
+      String(v || '')
+        .toLowerCase()
+        .includes(q),
+    )
+  })
+})
+
+function applySearch() {
+  search.value = searchInput.value
+}
+
+function clearSearch() {
+  searchInput.value = ''
+  search.value = ''
+}
 
 function resetForm() {
   editingId.value = null
@@ -147,7 +171,20 @@ onMounted(async () => {
 
     <div class="card">
       <h2 class="h2">Project List</h2>
+      <form class="form-row" style="margin-bottom: 0.75rem" @submit.prevent="applySearch">
+        <label class="field" style="min-width: 300px; max-width: 300px; flex: 0 0 300px">
+          <span>Search</span>
+          <input
+            v-model="searchInput"
+            type="text"
+            placeholder="Search code, name, or partner"
+          />
+        </label>
+        <button type="submit" class="btn-edit">Apply</button>
+        <button type="button" class="btn-ghost" @click="clearSearch">Clear</button>
+      </form>
       <div v-if="loading" class="muted">Loading…</div>
+      <div v-else-if="filteredRows.length === 0" class="muted">No matching projects.</div>
       <div v-else class="table-wrap">
         <table class="table">
           <thead>
@@ -160,7 +197,7 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in rows" :key="row.id">
+            <tr v-for="row in filteredRows" :key="row.id">
               <td>{{ row.code || '—' }}</td>
               <td>{{ row.name || '—' }}</td>
               <td>{{ (partnerById.get(row.partner_id)?.name ?? row.partner_name) || '—' }}</td>

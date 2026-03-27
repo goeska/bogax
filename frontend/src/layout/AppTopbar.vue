@@ -1,17 +1,15 @@
 <script setup>
-import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useLayout } from './composables/layout'
 import { useAuthStore } from '../stores/auth'
 
-const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const { toggleMenu } = useLayout()
 
-const title = computed(() => route.name?.toString().replaceAll('-', ' ') || 'BogaX')
-
 function logout() {
+  const ok = window.confirm('Are you sure you want to log out?')
+  if (!ok) return
   auth.logout()
   router.push('/login')
 }
@@ -23,7 +21,10 @@ function logout() {
       <button type="button" class="layout-menu-button" aria-label="Toggle menu" @click="toggleMenu">
         <i class="pi pi-chevron-right" />
       </button>
-      <h1 style="margin: 0; font-size: 1.05rem; font-weight: 700; text-transform: capitalize">{{ title }}</h1>
+      <a href="/" class="bogax-topbar-brand" aria-label="BogaX home">
+        <span class="bogax-topbar-brand-title">BogaX</span>
+        <span class="bogax-topbar-brand-sub">Reimagining the way you do business</span>
+      </a>
     </div>
     <div class="layout-topbar-end">
       <div class="layout-topbar-actions-end">
