@@ -2,7 +2,7 @@
  * Soft delete via PATCH { is_active: false }.
  * Pair with backend SoftDeactivateDestroyMixin on the same resource.
  */
-const DEFAULT_DEACTIVATE_ERROR = 'Failed to deactivate.'
+const DEFAULT_DEACTIVATE_ERROR = "Couldn't deactivate that row."
 
 export function deactivateErrorMessage(error, fallback = DEFAULT_DEACTIVATE_ERROR) {
   const data = error.response?.data

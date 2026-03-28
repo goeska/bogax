@@ -54,7 +54,7 @@ class ApiRootView(APIView):
         return Response(
             {
                 "service": "bogax-api",
-                "message": "Use POST /api/auth/login/ to get a JWT token, then send Authorization: Bearer <access>.",
+                "message": "POST /api/auth/login/ for a JWT, then Authorization: Bearer <access>.",
                 "endpoints": {
                     "health": f"{base}/health/",
                     "login": f"{base}/auth/login/",

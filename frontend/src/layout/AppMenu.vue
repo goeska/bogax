@@ -12,7 +12,7 @@ const model = computed(() => [
     items: [{ label: 'Dashboard', icon: 'pi pi-chart-bar', to: '/' }],
   },
   {
-    label: 'Master',
+    label: 'Master Data',
     icon: 'pi pi-database',
     items: [
       { label: 'Legal Entity Type', icon: 'pi pi-id-card', to: '/master/legal-entity-type' },
@@ -61,6 +61,29 @@ const model = computed(() => [
     ],
   },
   {
+    label: 'Delivery Order',
+    icon: 'pi pi-truck',
+    items: [
+      {
+        label: 'DO Form',
+        icon: 'pi pi-file-edit',
+        to: '/sales/do-form',
+      },
+      {
+        label: 'List',
+        icon: 'pi pi-list',
+        to: '/sales/sales-order',
+        query: { order_type: 'delivery_order' },
+      },
+      {
+        label: 'Line List',
+        icon: 'pi pi-list-check',
+        to: '/sales/sales-order-line',
+        query: { order_type: 'delivery_order' },
+      },
+    ],
+  },
+  {
     label: 'Purchase',
     icon: 'pi pi-shopping-bag',
     items: [
@@ -91,6 +114,9 @@ const model = computed(() => [
 </script>
 
 <template>
+  <div class="layout-menu-context">
+    <p class="layout-menu-context-title">ERP Navigation</p>
+  </div>
   <ul class="layout-menu">
     <AppMenuItem v-for="(item, index) in model" :key="item.label + index" :item="item" root />
   </ul>

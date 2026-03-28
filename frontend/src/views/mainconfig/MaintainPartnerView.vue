@@ -16,7 +16,7 @@ async function load() {
     const { data } = await api.get('/main-config/')
     maintainPartner.value = data.is_customer_maintained === true
   } catch {
-    err.value = 'Failed to load configuration.'
+    err.value = 'Could not load settings.'
   } finally {
     loading.value = false
   }
@@ -30,13 +30,13 @@ async function submit() {
     await api.patch('/main-config/', {
       is_customer_maintained: maintainPartner.value,
     })
-    ok.value = 'Saved.'
+    ok.value = 'All saved.'
     await load()
   } catch (e) {
     err.value =
       e.response?.data?.detail ||
       (typeof e.response?.data === 'object' && JSON.stringify(e.response.data)) ||
-      'Failed to save.'
+      'Could not save.'
   } finally {
     saving.value = false
   }
@@ -47,9 +47,17 @@ onMounted(load)
 
 <template>
   <div class="stack">
+    <section class="card erp-head">
+      <p class="erp-kicker">Main Configuration</p>
+      <div class="erp-title-row">
+        <h1 class="erp-title">Maintain Partner</h1>
+        <span class="erp-chip">Customer Identity Toggle</span>
+      </div>
+      <p class="muted question-lead">Whether POS asks for customer name/phone on retail sales</p>
+    </section>
+
     <div class="card">
       <h2 class="h2">Maintain Partner</h2>
-      <p class="muted question-lead">Maintain partner data for sales transactions</p>
       <div v-if="loading" class="muted">Loading…</div>
       <form v-else class="stack form-block" @submit.prevent="submit">
         <fieldset class="choices">

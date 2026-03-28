@@ -1,0 +1,42 @@
+---
+description: Keep global design tokens and CSS utilities consistent
+globs: frontend/src/style.css
+alwaysApply: false
+---
+
+# ERP Design Token Governance
+
+Aturan ini dipakai saat mengubah `frontend/src/style.css`.
+
+## Token-first policy
+
+- Ubah nilai visual utama lewat token di `:root`, bukan hardcode di banyak selector.
+- Prioritaskan token untuk: warna, radius, shadow, spacing, input/table density.
+- Jika menambah token baru, gunakan nama deskriptif dan konsisten dengan pola existing (`--border-*`, `--text-*`, `--shadow-*`).
+
+## Reuse over duplication
+
+- Jangan duplikasi style header/page jika sudah ada utility global:
+  - `erp-head`, `erp-head--danger`
+  - `erp-kicker`, `erp-title-row`, `erp-title`, `erp-chip`
+- Jangan menambahkan utility baru jika class existing sudah mencakup kebutuhan.
+
+## Density compatibility
+
+- Semua perubahan spacing tabel/form harus tetap kompatibel dengan mode:
+  - default (`:root`)
+  - compact (`:root.density-compact`)
+- Gunakan CSS variable (`--field-pad-*`, `--table-cell-*`, `--table-font`) untuk komponen yang terpengaruh density.
+
+## Safety checks
+
+- Pertahankan readability: kontras teks vs background harus tetap baik.
+- Hindari perubahan yang membuat topbar/sidebar kehilangan hierarchy visual.
+- Saat menambah selector global, pastikan tidak memecah halaman yang sudah memakai scoped style.
+
+## Do/Don't
+
+- Do: ubah sekali di utility global, dipakai lintas view.
+- Do: pertahankan class naming sederhana dan generik.
+- Don't: inline style di view untuk kebutuhan yang seharusnya utility global.
+- Don't: hardcode style per halaman jika bisa dipindah ke utility reusable.

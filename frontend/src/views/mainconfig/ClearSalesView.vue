@@ -15,7 +15,7 @@ async function runClear() {
   err.value = ''
   result.value = null
   if (confirmPhrase.value.trim() !== 'CLEAR') {
-    err.value = 'Type CLEAR (uppercase) in the confirmation field to proceed.'
+    err.value = 'Type CLEAR in all caps in the box to continue.'
     return
   }
   clearing.value = true
@@ -31,7 +31,7 @@ async function runClear() {
         ? JSON.stringify(e.response.data)
         : null) ||
       e.message ||
-      'Request failed.'
+      'Something went wrong.'
   } finally {
     clearing.value = false
   }
@@ -40,6 +40,17 @@ async function runClear() {
 
 <template>
   <div class="stack clear-sales-page">
+    <section class="card erp-head erp-head--danger">
+      <p class="erp-kicker">Maintenance</p>
+      <div class="erp-title-row">
+        <h1 class="erp-title">Clear Sales</h1>
+        <span class="erp-chip">Development / UAT Only</span>
+      </div>
+      <p class="muted lead">
+        Wipes sales transactions for dev/UAT - don't run this in prod.
+      </p>
+    </section>
+
     <div class="card card--danger">
       <h2 class="h2">Clear Sales</h2>
       <p class="muted lead">

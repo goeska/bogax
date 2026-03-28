@@ -10,6 +10,15 @@ from master.models import LegalEntityType
 
 from .models import Partner, Project, SalesOrder, SalesOrderLine, SalesOrderLineTax
 
+PARTNER_DUPLICATE_NAME_ERROR = (
+    "That name's already taken for this partner type "
+    "(corporate vs non-corporate) - try another one."
+)
+
+PARTNER_DUPLICATE_TAX_ID_ERROR = (
+    "That tax ID is already on another partner."
+)
+
 
 class PartnerMiniSerializer(serializers.ModelSerializer):
     class Meta:
@@ -19,18 +28,64 @@ class PartnerMiniSerializer(serializers.ModelSerializer):
 
 class PartnerSerializer(serializers.ModelSerializer):
     legal_entity_type_id = serializers.PrimaryKeyRelatedField(
-        queryset=LegalEntityType.objects.all(),
+        queryset=LegalEntityType.objects.filter(is_active=True),
         source="legal_entity_type",
         allow_null=True,
         required=False,
     )
     legal_entity_type_code = serializers.CharField(source="legal_entity_type.code", read_only=True)
     legal_entity_type_name = serializers.CharField(source="legal_entity_type.name", read_only=True)
+    parent_id = serializers.PrimaryKeyRelatedField(
+        queryset=Partner.objects.all(),
+        source="parent",
+        allow_null=True,
+        required=False,
+    )
+    parent_name = serializers.CharField(source="parent.name", read_only=True)
+
+    def validate_tax_id(self, value):
+        if value is None or str(value).strip() == "":
+            return None
+        return str(value).strip()
 
     def validate(self, attrs):
         let = attrs.get("legal_entity_type")
         if let is not None:
             attrs["is_corporate"] = True
+        if "parent" in attrs:
+            parent = attrs.get("parent")
+            inst = getattr(self, "instance", None)
+            if parent is not None and inst is not None and parent.pk == inst.pk:
+                raise serializers.ValidationError(
+                    {"parent_id": "A partner can't be its own parent."}
+                )
+
+        inst = getattr(self, "instance", None)
+        name = attrs.get("name", inst.name if inst is not None else None)
+        if name is None:
+            name = ""
+        is_corporate = attrs.get("is_corporate")
+        if is_corporate is None and inst is not None:
+            is_corporate = inst.is_corporate
+        is_corporate = bool(is_corporate)
+        name_norm = (name or "").strip().lower()
+        qs = Partner.objects.filter(name_norm=name_norm, is_corporate=is_corporate)
+        if inst is not None:
+            qs = qs.exclude(pk=inst.pk)
+        if qs.exists():
+            raise serializers.ValidationError({"name": PARTNER_DUPLICATE_NAME_ERROR})
+
+        if "tax_id" in attrs:
+            tid = attrs["tax_id"]
+        else:
+            tid = inst.tax_id if inst is not None else None
+        if tid:
+            norm = str(tid).strip().lower()
+            tqs = Partner.objects.filter(tax_id_norm=norm)
+            if inst is not None:
+                tqs = tqs.exclude(pk=inst.pk)
+            if tqs.exists():
+                raise serializers.ValidationError({"tax_id": PARTNER_DUPLICATE_TAX_ID_ERROR})
         return attrs
 
     class Meta:
@@ -43,6 +98,9 @@ class PartnerSerializer(serializers.ModelSerializer):
             "legal_entity_type_id",
             "legal_entity_type_code",
             "legal_entity_type_name",
+            "parent_id",
+            "parent_name",
+            "tax_id",
             "is_corporate",
             "is_customer",
             "is_vendor",
@@ -212,7 +270,7 @@ class SalesOrderReadSerializer(serializers.ModelSerializer):
 
 
 class PosSaveDraftSerializer(serializers.Serializer):
-    ORDER_TYPE_CHOICES = ("retail", "non_retail")
+    ORDER_TYPE_CHOICES = ("retail", "non_retail", "delivery_order")
 
     transaction_at = serializers.DateTimeField()
     product_id = serializers.IntegerField(min_value=1)
@@ -247,29 +305,29 @@ class PosSaveDraftSerializer(serializers.Serializer):
             tax_ids = attrs.get("tax_ids") or []
             if not tax_ids and not attrs.get("ppn_tax_id"):
                 raise serializers.ValidationError(
-                    {"tax_ids": "Select at least one tax when tax is applied."}
+                    {"tax_ids": "Turn off tax or pick at least one tax."}
                 )
         order_type = attrs.get("order_type") or "retail"
-        if order_type == "non_retail":
+        if order_type in ("non_retail", "delivery_order"):
             if not attrs.get("partner_id"):
                 raise serializers.ValidationError(
-                    {"partner_id": "Required when order_type is non_retail."}
+                    {"partner_id": "Pick a customer for this order type."}
                 )
             if not attrs.get("project_id"):
                 raise serializers.ValidationError(
-                    {"project_id": "Required when order_type is non_retail."}
+                    {"project_id": "Pick a project for this order type."}
                 )
         return attrs
 
     def validate_product_id(self, value):
         if not Product.objects.filter(pk=value, is_active=True).exists():
-            raise serializers.ValidationError("Invalid or inactive product.")
+            raise serializers.ValidationError("That product isn't available or is inactive.")
         return value
 
 
 class ProjectSerializer(serializers.ModelSerializer):
     partner_id = serializers.PrimaryKeyRelatedField(
-        queryset=Partner.objects.all(),
+        queryset=Partner.objects.filter(is_active=True),
         source="partner",
     )
     partner_name = serializers.CharField(source="partner.name", read_only=True)

@@ -119,7 +119,7 @@ class PurchaseSaveDraftSerializer(serializers.Serializer):
 
     def validate_product_id(self, value):
         if not Product.objects.filter(pk=value, is_active=True).exists():
-            raise serializers.ValidationError("Invalid or inactive product.")
+            raise serializers.ValidationError("That product isn't available or is inactive.")
         return value
 
 

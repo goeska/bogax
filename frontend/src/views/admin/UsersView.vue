@@ -16,8 +16,8 @@ async function load() {
     err.value =
       e.response?.data?.detail ||
       (e.response?.status === 403
-        ? 'You do not have permission to view users.'
-        : 'Failed to load users.')
+        ? 'No access to the user list.'
+        : 'Could not load users.')
     rows.value = []
   } finally {
     loading.value = false
@@ -34,8 +34,14 @@ onMounted(load)
 
 <template>
   <div class="stack users-page">
-    <h2 class="h2">Users</h2>
-    <p class="muted">User accounts and roles used by this app.</p>
+    <section class="card erp-head">
+      <p class="erp-kicker">Administration</p>
+      <div class="erp-title-row">
+        <h1 class="erp-title">Users</h1>
+        <span class="erp-chip">Account • Role • Access</span>
+      </div>
+      <p class="muted">Who's in the system and what hat they wear.</p>
+    </section>
     <p v-if="err" class="error">{{ err }}</p>
 
     <div v-if="loading" class="muted">Loading…</div>

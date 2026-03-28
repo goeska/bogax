@@ -39,7 +39,7 @@ async function load(page = 1) {
     })
     applyDrfResponse(data, rows, page)
   } catch (e) {
-    err.value = e.response?.data?.detail || e.message || 'Failed to load purchase order lines.'
+    err.value = e.response?.data?.detail || e.message || 'Could not load PO lines.'
     rows.value = []
     totalCount.value = 0
   } finally {
@@ -94,8 +94,14 @@ onMounted(async () => {
 
 <template>
   <div class="stack purchase-order-line-page">
-    <h2 class="h2">PO Item List</h2>
-    <p class="muted lead">All transaction lines from purchase orders.</p>
+    <section class="card erp-head">
+      <p class="erp-kicker">Purchase Analytics</p>
+      <div class="erp-title-row">
+        <h1 class="erp-title">PO Item List</h1>
+        <span class="erp-chip">Ordered • Received • Outstanding</span>
+      </div>
+      <p class="muted lead">All transaction lines from purchase orders.</p>
+    </section>
 
     <div class="list-filters">
       <label class="filter-field">
@@ -186,26 +192,41 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.purchase-order-line-page { max-width: 1300px; }
-.lead { margin: -0.25rem 0 1rem; font-size: 0.95rem; }
+.purchase-order-line-page {
+  max-width: 1300px;
+  gap: 0.7rem;
+}
+
+.lead {
+  margin: 0.1rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
 .list-filters {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.75rem 1rem;
-  margin-bottom: 1rem;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  gap: 0.55rem 0.8rem;
+  margin-bottom: 0.4rem;
+  padding: 0.68rem 0.8rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: #fbfdff;
 }
 .filter-field {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
   font-size: 0.85rem;
 }
-.filter-field span { color: var(--muted); }
-.filter-input { min-width: 10rem; padding: 0.35rem 0.5rem; font-size: 0.9rem; }
-.filter-actions { display: flex; gap: 0.5rem; align-items: center; }
+.filter-field span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.15;
+}
+.filter-input { min-width: 9.2rem; padding: 0.42rem 0.56rem; font-size: 0.86rem; }
+.filter-actions { display: flex; gap: 0.4rem; align-items: center; }
 .table-wrap { overflow-x: auto; }
 .purchase-order-line-table .col-num { text-align: right; font-variant-numeric: tabular-nums; }
 .pager {

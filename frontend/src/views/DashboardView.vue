@@ -8,6 +8,10 @@ const chartWeek = shallowRef(null)
 const chartMonth = shallowRef(null)
 const err = ref('')
 const loading = ref(true)
+const weekTotal = ref(0)
+const monthTotal = ref(0)
+const weekSeriesCount = ref(0)
+const monthSeriesCount = ref(0)
 
 const palette = [
   '#2563eb',
@@ -27,17 +31,17 @@ function formatAxisLabel(isoDate, period) {
   const d = new Date(`${isoDate}T12:00:00`)
   if (Number.isNaN(d.getTime())) return isoDate
   if (period === 'week') {
-    return d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })
+    return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })
   }
-  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+  return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
 }
 
-/** Sumbu X minggu ini: tekan tanggal kalender (hari + tanggal). */
+/** This week’s X-axis: calendar date (weekday + day). */
 function formatWeekDateAxis(isoDate) {
   if (!isoDate) return ''
   const d = new Date(`${isoDate}T12:00:00`)
   if (Number.isNaN(d.getTime())) return isoDate
-  return d.toLocaleDateString('id-ID', {
+  return d.toLocaleDateString('en-US', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -46,11 +50,28 @@ function formatWeekDateAxis(isoDate) {
 }
 
 function compactNumber(v) {
-  return v >= 1_000_000
-    ? `${(v / 1_000_000).toFixed(1)}jt`
-    : v >= 1000
-      ? `${(v / 1000).toFixed(0)}k`
-      : String(v)
+  return v >= 1_000_000_000
+    ? `${(v / 1_000_000_000).toFixed(1)}B`
+    : v >= 1_000_000
+      ? `${(v / 1_000_000).toFixed(1)}M`
+      : v >= 1000
+        ? `${(v / 1000).toFixed(0)}k`
+        : String(v)
+}
+
+function sumSeriesValues(series) {
+  return (series || []).reduce(
+    (acc, s) => acc + (s?.data || []).reduce((lineAcc, n) => lineAcc + (Number(n) || 0), 0),
+    0,
+  )
+}
+
+function formatCompactIdr(v) {
+  const n = Number(v) || 0
+  if (n >= 1_000_000_000) return `Rp ${(n / 1_000_000_000).toFixed(1)}B`
+  if (n >= 1_000_000) return `Rp ${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `Rp ${(n / 1_000).toFixed(0)}k`
+  return `Rp ${Math.round(n)}`
 }
 
 function createAxisBreak(series) {
@@ -103,7 +124,7 @@ function buildChartOption({ title, labels, series, period, yAxisName, weekDateAx
       axisPointer: { type: 'cross', label: { backgroundColor: '#64748b' } },
       valueFormatter: (v) =>
         typeof v === 'number'
-          ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v)
+          ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v)
           : v,
     },
     legend: {
@@ -122,7 +143,7 @@ function buildChartOption({ title, labels, series, period, yAxisName, weekDateAx
       type: 'category',
       boundaryGap: false,
       data: axisLabels,
-      name: weekDateAxis ? 'Tanggal (minggu ini)' : '',
+      name: weekDateAxis ? 'Date (this week)' : '',
       nameLocation: 'middle',
       nameGap: 28,
       nameTextStyle: { color: '#64748b', fontSize: 11 },
@@ -185,6 +206,10 @@ onMounted(async () => {
       fetchStacked('week', { includeTaxes: true }),
       fetchStacked('month'),
     ])
+    weekTotal.value = sumSeriesValues(weekData.series)
+    monthTotal.value = sumSeriesValues(monthData.series)
+    weekSeriesCount.value = (weekData.series || []).length
+    monthSeriesCount.value = (monthData.series || []).length
     if (!echartsModule) {
       echartsModule = await import('echarts')
     }
@@ -196,12 +221,12 @@ onMounted(async () => {
       chartWeek.value = echartsModule.init(elWeek.value, null, { renderer: 'canvas' })
       chartWeek.value.setOption(
         buildChartOption({
-          title: 'Penjualan minggu ini (per produk, termasuk pajak)',
+          title: 'This week’s sales (by product, tax included)',
           labels: weekData.labels || [],
           series: weekData.series || [],
           period: 'week',
           weekDateAxis: true,
-          yAxisName: 'Rp (termasuk pajak)',
+          yAxisName: 'IDR (incl. tax)',
         }),
         true,
       )
@@ -213,7 +238,7 @@ onMounted(async () => {
       chartMonth.value = echartsModule.init(elMonth.value, null, { renderer: 'canvas' })
       chartMonth.value.setOption(
         buildChartOption({
-          title: 'Penjualan bulan ini (per produk)',
+          title: 'This month’s sales (by product)',
           labels: monthData.labels || [],
           series: monthData.series || [],
           period: 'month',
@@ -228,7 +253,7 @@ onMounted(async () => {
       e.response?.data?.period?.[0] ||
       e.response?.data?.detail ||
       e.message ||
-      'Gagal memuat grafik.'
+      'Could not load charts.'
     loading.value = false
   }
 })
@@ -242,18 +267,44 @@ onUnmounted(() => {
 
 <template>
   <div class="dashboard-home">
-    <p class="lead dashboard-lead">
-      <strong>Minggu ini:</strong> nilai per baris termasuk pajak (sumbu Y dalam Rp).
-      <strong>Bulan ini:</strong> subtotal baris (qty × harga), belum termasuk pajak per baris.
-    </p>
-    <div v-if="loading" class="dashboard-loading muted">Memuat grafik…</div>
+    <section class="card erp-head">
+      <p class="erp-kicker">Executive Overview</p>
+      <div class="erp-title-row">
+        <h1 class="erp-title">Sales Dashboard</h1>
+        <span class="erp-chip">Live Performance Snapshot</span>
+      </div>
+      <p class="lead dashboard-lead">
+        <strong>This week:</strong> line amounts include tax (Y-axis in IDR).
+        <strong>This month:</strong> line subtotals (qty × price), tax per line not included.
+      </p>
+      <div class="dashboard-kpi-row">
+        <div class="dashboard-kpi">
+          <span class="dashboard-kpi-label">Week to date</span>
+          <strong>{{ formatCompactIdr(weekTotal) }}</strong>
+        </div>
+        <div class="dashboard-kpi dashboard-kpi--violet">
+          <span class="dashboard-kpi-label">Month to date</span>
+          <strong>{{ formatCompactIdr(monthTotal) }}</strong>
+        </div>
+        <div class="dashboard-kpi dashboard-kpi--green">
+          <span class="dashboard-kpi-label">Active products (week)</span>
+          <strong>{{ weekSeriesCount }}</strong>
+        </div>
+        <div class="dashboard-kpi dashboard-kpi--slate">
+          <span class="dashboard-kpi-label">Active products (month)</span>
+          <strong>{{ monthSeriesCount }}</strong>
+        </div>
+      </div>
+    </section>
+
+    <div v-if="loading" class="dashboard-loading muted">Loading charts…</div>
     <p v-else-if="err" class="error">{{ err }}</p>
     <div v-else class="dashboard-charts">
       <div class="dashboard-chart-card card">
-        <div ref="elWeek" class="dashboard-chart" role="img" aria-label="Grafik penjualan minggu ini" />
+        <div ref="elWeek" class="dashboard-chart" role="img" aria-label="This week sales chart" />
       </div>
       <div class="dashboard-chart-card card">
-        <div ref="elMonth" class="dashboard-chart" role="img" aria-label="Grafik penjualan bulan ini" />
+        <div ref="elMonth" class="dashboard-chart" role="img" aria-label="This month sales chart" />
       </div>
     </div>
   </div>
@@ -266,11 +317,69 @@ onUnmounted(() => {
 }
 
 .dashboard-lead {
-  margin: 0;
+  margin: 0.35rem 0 0.72rem;
   padding: 0.8rem 0.95rem;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+}
+
+.dashboard-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+@media (max-width: 1080px) {
+  .dashboard-kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-kpi-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dashboard-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  border: 1px solid #c7d2fe;
+  border-radius: 11px;
+  background: #eef2ff;
+  color: #3730a3;
+  padding: 0.6rem 0.7rem;
+}
+
+.dashboard-kpi-label {
+  font-size: 0.76rem;
+  font-weight: 620;
+  opacity: 0.9;
+}
+
+.dashboard-kpi strong {
+  font-size: 1rem;
+  font-weight: 760;
+}
+
+.dashboard-kpi--violet {
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+  color: #5b21b6;
+}
+
+.dashboard-kpi--green {
+  border-color: #bbf7d0;
+  background: #e8f8ef;
+  color: #166534;
+}
+
+.dashboard-kpi--slate {
+  border-color: #d8e1ec;
+  background: #f1f5f9;
+  color: #334155;
 }
 
 .dashboard-loading {

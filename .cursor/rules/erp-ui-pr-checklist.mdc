@@ -1,0 +1,37 @@
+---
+description: UI quality checklist for new screens and visual changes
+globs: frontend/src/**/*.vue
+alwaysApply: false
+---
+
+# ERP UI PR Checklist
+
+Gunakan checklist ini saat menambah menu baru atau mengubah tampilan.
+
+## Required checklist
+
+- [ ] Halaman memakai pola `stack` + `card` + header `erp-head` (atau alasan jelas jika berbeda).
+- [ ] Tidak ada inline style (`style="..."`) di template.
+- [ ] Gunakan utility global yang sudah ada (form, table, filters, buttons) sebelum menambah class baru.
+- [ ] Semua tabel/list tetap terbaca di mode density `comfortable` dan `compact`.
+- [ ] Empty/loading/error state tetap jelas dan konsisten (`muted`, `error`, `small`).
+- [ ] Tombol aksi penting tetap jelas hierarchy-nya (`btn-primary` untuk primary action).
+
+## Responsive and accessibility checks
+
+- [ ] Layout tetap usable di mobile (<= 760px) tanpa elemen penting terpotong.
+- [ ] Teks dan badge tetap memiliki kontras yang cukup terhadap background.
+- [ ] Header/chip/badge tidak menyebabkan overflow horizontal.
+- [ ] Label form tetap terlihat jelas dan field penting memiliki indikator required.
+
+## Consistency checks
+
+- [ ] Naming class baru mengikuti pola sederhana dan reusable.
+- [ ] Jika ada style baru lintas halaman, pindahkan ke `frontend/src/style.css`.
+- [ ] Jika ada style khusus halaman, simpan di `<style scoped>` dan tetap minimal.
+
+## Quick test scenario
+
+- [ ] Buka halaman target dalam mode normal dan compact.
+- [ ] Uji alur utama: load data, kosong/no data, submit/save, error response.
+- [ ] Cek tampilan tabel/filter/header setelah refresh.

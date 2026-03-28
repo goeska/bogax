@@ -37,7 +37,7 @@ async function load() {
     const { data } = await api.get('/coas/')
     rows.value = data.results ?? data
   } catch (e) {
-    err.value = e.response?.data?.detail || 'Failed to load CoA.'
+    err.value = e.response?.data?.detail || 'Could not load CoA.'
     rows.value = []
   } finally {
     loading.value = false
@@ -83,7 +83,7 @@ async function submit() {
       e.response?.data?.detail ||
       (typeof e.response?.data === 'object' && JSON.stringify(e.response.data)) ||
       e.message ||
-      'Failed to save.'
+      'Could not save.'
   } finally {
     saving.value = false
   }
@@ -123,6 +123,15 @@ onMounted(load)
 
 <template>
   <div class="stack">
+    <section class="card erp-head">
+      <p class="erp-kicker">Master Data</p>
+      <div class="erp-title-row">
+        <h1 class="erp-title">Chart of Accounts</h1>
+        <span class="erp-chip">2-Level Hierarchy</span>
+      </div>
+      <p class="muted">Define your chart of accounts as the foundation for financial posting.</p>
+    </section>
+
     <div class="card">
       <h2 class="h2">{{ editingId != null ? 'Edit CoA' : 'Add CoA' }}</h2>
       <form class="form-row" @submit.prevent="submit">
@@ -155,8 +164,8 @@ onMounted(load)
         </button>
       </form>
       <p v-if="err" class="error">{{ err }}</p>
-      <p class="muted small" style="margin: 0.5rem 0 0">
-        2-level only: parent must be a top-level CoA.
+      <p class="muted small coa-helper-text">
+        Two levels max: parent has to be a top-level account.
       </p>
     </div>
 
@@ -191,7 +200,7 @@ onMounted(load)
                 </td>
               </tr>
               <tr v-for="c in (childrenByParent.get(p.id) || [])" :key="c.id">
-                <td style="padding-left: 1.25rem">↳ {{ c.code }}</td>
+                <td class="coa-child-code">↳ {{ c.code }}</td>
                 <td>{{ p.code }}</td>
                 <td>{{ c.name }}</td>
                 <td>
@@ -211,4 +220,14 @@ onMounted(load)
     </div>
   </div>
 </template>
+
+<style scoped>
+.coa-helper-text {
+  margin: 0.5rem 0 0;
+}
+
+.coa-child-code {
+  padding-left: 1.25rem;
+}
+</style>
 

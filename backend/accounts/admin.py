@@ -12,9 +12,9 @@ class UserAdmin(BaseUserAdmin):
     search_fields = ("email", "username", "phone")
     fieldsets = (
         (None, {"fields": ("email", "password")}),
-        ("Profil", {"fields": ("username", "first_name", "last_name", "phone", "role")}),
+        ("Profile", {"fields": ("username", "first_name", "last_name", "phone", "role")}),
         (
-            "Izin",
+            "Permissions",
             {
                 "fields": (
                     "is_active",
@@ -25,7 +25,7 @@ class UserAdmin(BaseUserAdmin):
                 ),
             },
         ),
-        ("Tanggal penting", {"fields": ("last_login", "date_joined")}),
+        ("Important dates", {"fields": ("last_login", "date_joined")}),
     )
     add_fieldsets = (
         (

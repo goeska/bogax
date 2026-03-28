@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLayout } from './composables/layout'
 import { useAuthStore } from '../stores/auth'
@@ -6,9 +7,18 @@ import { useAuthStore } from '../stores/auth'
 const router = useRouter()
 const auth = useAuthStore()
 const { toggleMenu } = useLayout()
+const userEmail = computed(() => auth.user?.email || 'User')
+const todayLabel = computed(() =>
+  new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }),
+)
 
 function logout() {
-  const ok = window.confirm('Are you sure you want to log out?')
+  const ok = window.confirm('Log out now?')
   if (!ok) return
   auth.logout()
   router.push('/login')
@@ -29,11 +39,21 @@ function logout() {
     <div class="layout-topbar-end">
       <div class="layout-topbar-actions-end">
         <ul class="layout-topbar-items">
-          <li>
-            <span style="padding: 0.4rem 0.7rem; color: var(--text-color-secondary)">{{ auth.user?.email || 'User' }}</span>
+          <li class="topbar-date-item">
+            <span class="bogax-date-chip topbar-date-chip">
+              <i class="pi pi-calendar" />
+              <span>{{ todayLabel }}</span>
+            </span>
           </li>
           <li>
-            <a @click="logout"><i class="pi pi-sign-out" /></a>
+            <span class="topbar-user-chip">
+              <span class="topbar-user-email">{{ userEmail }}</span>
+            </span>
+          </li>
+          <li>
+            <button type="button" class="topbar-logout-btn" title="Logout" @click="logout">
+              <i class="pi pi-sign-out" />
+            </button>
           </li>
         </ul>
       </div>

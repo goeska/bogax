@@ -19,11 +19,24 @@ class ProductCategory(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
+    name_norm = models.CharField(max_length=100, editable=False, blank=True, default="")
 
     class Meta:
         db_table = "product_category"
         managed = False
         ordering = ["name"]
+
+    def save(self, *args, **kwargs):
+        raw = (self.name or "").strip()
+        self.name = raw
+        self.name_norm = raw.lower() if raw else ""
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            uf = set(update_fields)
+            if "name" in uf:
+                uf.add("name_norm")
+            kwargs["update_fields"] = list(uf)
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.name
@@ -48,11 +61,24 @@ class Product(models.Model):
     )
     is_active = models.BooleanField(default=True)
     unit_price = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    name_norm = models.CharField(max_length=255, editable=False, blank=True, default="")
 
     class Meta:
         db_table = "product"
         managed = False
         ordering = ["name"]
+
+    def save(self, *args, **kwargs):
+        raw = (self.name or "").strip()
+        self.name = raw
+        self.name_norm = raw.lower() if raw else ""
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            uf = set(update_fields)
+            if "name" in uf:
+                uf.add("name_norm")
+            kwargs["update_fields"] = list(uf)
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.name
@@ -77,11 +103,24 @@ class Tax(models.Model):
     name = models.CharField(max_length=100)
     rate_percent = models.DecimalField(max_digits=20, decimal_places=2)
     is_active = models.BooleanField(default=True)
+    name_norm = models.CharField(max_length=100, editable=False, blank=True, default="")
 
     class Meta:
         db_table = "tax"
         managed = False
         ordering = ["name"]
+
+    def save(self, *args, **kwargs):
+        raw = (self.name or "").strip()
+        self.name = raw
+        self.name_norm = raw.lower() if raw else ""
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            uf = set(update_fields)
+            if "name" in uf:
+                uf.add("name_norm")
+            kwargs["update_fields"] = list(uf)
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.name
@@ -91,11 +130,24 @@ class Uom(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
+    name_norm = models.CharField(max_length=100, editable=False, blank=True, default="")
 
     class Meta:
         db_table = "uom"
         managed = False
         ordering = ["name"]
+
+    def save(self, *args, **kwargs):
+        raw = (self.name or "").strip()
+        self.name = raw
+        self.name_norm = raw.lower() if raw else ""
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            uf = set(update_fields)
+            if "name" in uf:
+                uf.add("name_norm")
+            kwargs["update_fields"] = list(uf)
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.name

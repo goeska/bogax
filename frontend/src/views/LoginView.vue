@@ -23,7 +23,7 @@ async function submit() {
     error.value =
       e.response?.data?.detail ||
       e.response?.data?.non_field_errors?.[0] ||
-      'Login failed. Please check your email and password.'
+      'Nope - check email and password.'
   } finally {
     loading.value = false
   }
@@ -33,7 +33,7 @@ async function submit() {
 <template>
   <div class="auth-wrap">
     <div class="auth-card card">
-      <p class="muted small login-lead">Sign in to continue.</p>
+      <p class="muted small login-lead">Sign in to jump in.</p>
       <form class="stack" @submit.prevent="submit">
         <label class="field">
           <span>Email</span>

@@ -4,7 +4,7 @@
 export function formatIdr(n) {
   const v = Number(n)
   if (!Number.isFinite(v)) return '—'
-  return new Intl.NumberFormat('id-ID', {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'IDR',
     minimumFractionDigits: 0,
@@ -19,7 +19,7 @@ export function formatIdr(n) {
 export function formatDateTimeIso(iso, { empty = '—' } = {}) {
   if (!iso) return empty
   try {
-    return new Intl.DateTimeFormat('id-ID', {
+    return new Intl.DateTimeFormat('en-US', {
       dateStyle: 'medium',
       timeStyle: 'short',
     }).format(new Date(iso))

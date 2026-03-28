@@ -56,7 +56,8 @@ async function loadPartners() {
   partnersLoading.value = true
   try {
     const { data } = await api.get('/partners/', { params: { is_corporate: '1' } })
-    partners.value = data.results ?? data
+    const list = data.results ?? data
+    partners.value = Array.isArray(list) ? list.filter((p) => p.is_active !== false) : []
   } catch {
     partners.value = []
   } finally {
@@ -71,7 +72,7 @@ async function load() {
     const { data } = await api.get('/projects/')
     rows.value = data.results ?? data
   } catch {
-    err.value = 'Could not load projects. Please try again.'
+    err.value = 'Could not load projects.'
     rows.value = []
   } finally {
     loading.value = false
@@ -97,8 +98,8 @@ async function submit() {
       partner_id: form.value.partner_id,
       is_active: !!form.value.is_active,
     }
-    if (!payload.name) throw new Error('Project name is required.')
-    if (!payload.partner_id) throw new Error('Corporate partner is required.')
+    if (!payload.name) throw new Error('Add a project name.')
+    if (!payload.partner_id) throw new Error('Pick a corporate customer.')
 
     if (editingId.value != null) {
       await api.patch(`/projects/${editingId.value}/`, payload)
@@ -112,7 +113,7 @@ async function submit() {
       e.response?.data?.detail ||
       (typeof e.response?.data === 'object' && JSON.stringify(e.response.data)) ||
       e.message ||
-      'Could not save. Please try again.'
+      'Could not save - try again.'
   } finally {
     saving.value = false
   }
@@ -139,6 +140,15 @@ onMounted(async () => {
 
 <template>
   <div class="stack">
+    <section class="card erp-head">
+      <p class="erp-kicker">Sales Non Retail</p>
+      <div class="erp-title-row">
+        <h1 class="erp-title">Project Management</h1>
+        <span class="erp-chip">Code • Partner • Active</span>
+      </div>
+      <p class="muted">Manage corporate customer projects for non-retail sales orders.</p>
+    </section>
+
     <div class="card">
       <h2 class="h2">{{ editingId != null ? 'Edit Project' : 'Add Project' }}</h2>
       <form class="form-row" @submit.prevent="submit">
@@ -171,8 +181,8 @@ onMounted(async () => {
 
     <div class="card">
       <h2 class="h2">Project List</h2>
-      <form class="form-row" style="margin-bottom: 0.75rem" @submit.prevent="applySearch">
-        <label class="field" style="min-width: 300px; max-width: 300px; flex: 0 0 300px">
+      <form class="form-row project-search-row" @submit.prevent="applySearch">
+        <label class="field project-search-field">
           <span>Search</span>
           <input
             v-model="searchInput"
@@ -221,6 +231,16 @@ onMounted(async () => {
 <style scoped>
 .table-wrap {
   overflow-x: auto;
+}
+
+.project-search-row {
+  margin-bottom: 0.75rem;
+}
+
+.project-search-field {
+  min-width: 300px;
+  max-width: 300px;
+  flex: 0 0 300px;
 }
 
 .state-pill {

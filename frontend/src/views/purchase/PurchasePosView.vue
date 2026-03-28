@@ -28,7 +28,8 @@ const confirmSaving = ref(false)
 const reopenSaving = ref(false)
 const confirmHint = ref('')
 const appendMode = ref(true)
-const REPLACE_CONFIRM_TEXT = 'Are you sure to replace the existing items?'
+const REPLACE_CONFIRM_TEXT =
+  "Replace the lines already on this PO? You can't auto-undo that here."
 
 const transactionErr = ref('')
 const productCategoryErr = ref('')
@@ -163,7 +164,7 @@ async function loadProductsForCategory(id) {
       product_types: 'storable,consumable',
     })
   } catch {
-    productsErr.value = 'Failed to load products.'
+    productsErr.value = 'Could not load products.'
     products.value = []
   } finally {
     productsLoading.value = false
@@ -288,7 +289,7 @@ async function loadOrderFromRoute(raw) {
       lineFormLocked.value = true
     }
   } catch (e) {
-    saveDraftApiErr.value = e.response?.data?.detail || e.message || 'Failed to load order.'
+    saveDraftApiErr.value = e.response?.data?.detail || e.message || 'Could not load order.'
   }
 }
 
@@ -298,33 +299,33 @@ async function saveDraft() {
   vendorNotice.value = ''
   clearErrors()
   if (draftResult.value?.state === 'confirmed') {
-    saveDraftApiErr.value = 'Confirmed orders cannot be changed.'
+    saveDraftApiErr.value = "Can't edit a confirmed PO."
     return
   }
   if (!(transactionAt.value instanceof Date) || Number.isNaN(transactionAt.value.getTime())) {
-    transactionErr.value = 'Time transaction is required.'
+    transactionErr.value = 'Pick a date and time.'
     return
   }
   if (!selectedCategoryId.value) {
-    productCategoryErr.value = 'Product category is required.'
+    productCategoryErr.value = 'Pick a product category.'
     return
   }
   if (!selectedProductId.value) {
-    productErr.value = 'Product is required.'
+    productErr.value = 'Pick a product.'
     return
   }
   const qty = parsedQuantity()
   if (qty == null || qty <= 0) {
-    quantityErr.value = 'Quantity is required.'
+    quantityErr.value = 'Use a positive quantity.'
     return
   }
   const up = parsedUnitPrice()
   if (up == null || up < 0) {
-    unitPriceErr.value = 'Unit price is required.'
+    unitPriceErr.value = 'Add a unit price (zero or more).'
     return
   }
   if (!uomDisplay.value) {
-    uomErr.value = 'UOM is required.'
+    uomErr.value = 'UOM missing.'
     return
   }
   saveDraftSaving.value = true
@@ -358,7 +359,7 @@ async function saveDraft() {
 async function deleteLine(line) {
   const orderId = draftResult.value?.id
   if (!orderId || draftResult.value?.state !== 'draft') return
-  if (!confirm(`Delete item "${line.product_name}"?`)) return
+  if (!confirm(`Drop "${line.product_name}" from this PO?`)) return
   try {
     const { data } = await api.post(`/purchase-orders/${orderId}/delete-line/`, {
       purchase_order_line_id: line.id,
@@ -369,7 +370,7 @@ async function deleteLine(line) {
       resetLineFormFields()
     }
   } catch (e) {
-    saveDraftApiErr.value = e.response?.data?.detail || e.message || 'Failed to delete line.'
+    saveDraftApiErr.value = e.response?.data?.detail || e.message || 'Could not delete line.'
   }
 }
 
@@ -383,7 +384,7 @@ async function confirmOrder() {
     draftResult.value = data
     confirmHint.value = `Purchase order #${id} confirmed.`
   } catch (e) {
-    confirmHint.value = e.response?.data?.detail || e.message || 'Failed to confirm.'
+    confirmHint.value = e.response?.data?.detail || e.message || 'Could not confirm.'
   } finally {
     confirmSaving.value = false
   }
@@ -400,7 +401,7 @@ async function reopenOrder() {
     lineFormLocked.value = true
     confirmHint.value = `Purchase order #${id} reopened.`
   } catch (e) {
-    confirmHint.value = e.response?.data?.detail || e.message || 'Failed to reopen.'
+    confirmHint.value = e.response?.data?.detail || e.message || 'Could not reopen.'
   } finally {
     reopenSaving.value = false
   }
@@ -408,9 +409,10 @@ async function reopenOrder() {
 
 onMounted(async () => {
   try {
-    categories.value = await fetchAllPages('/product-categories/')
+    const allCat = await fetchAllPages('/product-categories/')
+    categories.value = allCat.filter((c) => c.is_active !== false)
   } catch {
-    catalogErr.value = 'Failed to load product categories.'
+    catalogErr.value = 'Could not load categories.'
   }
   try {
     const taxes = await fetchAllPages('/taxes/')
@@ -419,7 +421,7 @@ onMounted(async () => {
       allowed.includes(String(t.name || '').trim().toLowerCase().replace(/\s+/g, ' ')),
     )
   } catch {
-    taxLoadErr.value = 'Failed to load purchase taxes.'
+    taxLoadErr.value = 'Could not load purchase taxes.'
   }
   configReady.value = true
   await loadOrderFromRoute(route.query.orderId)

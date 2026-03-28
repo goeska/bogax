@@ -39,7 +39,7 @@ async function load(page = 1) {
     })
     applyDrfResponse(data, rows, page)
   } catch (e) {
-    err.value = e.response?.data?.detail || e.message || 'Failed to load purchase orders.'
+    err.value = e.response?.data?.detail || e.message || 'Could not load purchase orders.'
     rows.value = []
     totalCount.value = 0
   } finally {
@@ -70,14 +70,14 @@ function openInPos(row) {
 
 async function remove(row) {
   const label = row.code || `#${row.id}`
-  if (!confirm(`Delete purchase order ${label}? It will be soft-deleted.`)) return
+  if (!confirm(`Trash purchase order ${label}? (soft delete)`)) return
   deletingId.value = row.id
   err.value = ''
   try {
     await api.delete(`/purchase-orders/${row.id}/`)
     await load(currentPage.value)
   } catch (e) {
-    err.value = e.response?.data?.detail || e.message || 'Failed to delete.'
+    err.value = e.response?.data?.detail || e.message || 'Could not delete.'
   } finally {
     deletingId.value = null
   }
@@ -90,7 +90,7 @@ async function reopen(row) {
     await api.post(`/purchase-orders/${row.id}/reopen/`, {})
     await load(currentPage.value)
   } catch (e) {
-    err.value = e.response?.data?.detail || e.message || 'Failed to reopen.'
+    err.value = e.response?.data?.detail || e.message || 'Could not reopen.'
   } finally {
     reopeningId.value = null
   }
@@ -114,7 +114,14 @@ onMounted(async () => {
 
 <template>
   <div class="stack purchase-order-page">
-    <h2 class="h2">PO List</h2>
+    <section class="card erp-head">
+      <p class="erp-kicker">Purchase Control</p>
+      <div class="erp-title-row">
+        <h1 class="erp-title">PO List</h1>
+        <span class="erp-chip">Draft • Confirmed • Reopen</span>
+      </div>
+      <p class="muted lead">Review and manage active purchase orders quickly and consistently.</p>
+    </section>
 
     <div class="list-filters">
       <label class="filter-field">
@@ -220,31 +227,47 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.purchase-order-page { max-width: 1200px; }
+.purchase-order-page {
+  max-width: 1200px;
+  gap: 0.7rem;
+}
+
+.lead {
+  margin: 0.1rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
 .list-filters {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.75rem 1rem;
-  margin-bottom: 1rem;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  gap: 0.55rem 0.8rem;
+  margin-bottom: 0.4rem;
+  padding: 0.68rem 0.8rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: #fbfdff;
 }
 .filter-field {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
   font-size: 0.85rem;
 }
-.filter-field span { color: var(--muted); }
+.filter-field span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.15;
+}
 .filter-input {
-  min-width: 10rem;
-  padding: 0.35rem 0.5rem;
-  font-size: 0.9rem;
+  min-width: 9.2rem;
+  padding: 0.42rem 0.56rem;
+  font-size: 0.86rem;
 }
 .filter-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
   align-items: center;
 }
 .table-wrap { overflow-x: auto; }

@@ -16,7 +16,7 @@ async function load() {
     const { data } = await api.get('/main-config/')
     isRestaurant.value = Boolean(data.is_restaurant)
   } catch {
-    err.value = 'Failed to load configuration.'
+    err.value = 'Could not load settings.'
   } finally {
     loading.value = false
   }
@@ -28,13 +28,13 @@ async function submit() {
   ok.value = ''
   try {
     await api.patch('/main-config/', { is_restaurant: isRestaurant.value })
-    ok.value = 'Saved.'
+    ok.value = 'All saved.'
     await load()
   } catch (e) {
     err.value =
       e.response?.data?.detail ||
       (typeof e.response?.data === 'object' && JSON.stringify(e.response.data)) ||
-      'Failed to save.'
+      'Could not save.'
   } finally {
     saving.value = false
   }
@@ -45,6 +45,15 @@ onMounted(load)
 
 <template>
   <div class="stack">
+    <section class="card erp-head">
+      <p class="erp-kicker">Main Configuration</p>
+      <div class="erp-title-row">
+        <h1 class="erp-title">Business Type</h1>
+        <span class="erp-chip">Restaurant • Store</span>
+      </div>
+      <p class="muted">Choose the primary business mode that drives the default transaction flow.</p>
+    </section>
+
     <div class="card">
       <h2 class="h2">Business Type</h2>
       <div v-if="loading" class="muted">Loading…</div>

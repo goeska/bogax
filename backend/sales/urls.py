@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     ClearSalesDevelopmentDataView,
+    DeliveryOrderSaveDraftView,
     NonRetailSaveDraftView,
     PartnerViewSet,
     PosSaveDraftView,
@@ -29,6 +30,11 @@ urlpatterns = [
         "sales/non-retail/save-draft/",
         NonRetailSaveDraftView.as_view(),
         name="sales-non-retail-save-draft",
+    ),
+    path(
+        "sales/delivery-order/save-draft/",
+        DeliveryOrderSaveDraftView.as_view(),
+        name="sales-delivery-order-save-draft",
     ),
     path(
         "sales/clear-development-data/",

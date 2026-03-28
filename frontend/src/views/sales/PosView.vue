@@ -6,10 +6,13 @@ import { fetchAllPages } from '../../utils/fetchAllPages'
 import { formatDateTimeIso, formatIdr, formatTransactionDisplay } from '../../utils/format'
 
 const route = useRoute()
-const isNonRetail = computed(() => route.name === 'sales-so-form')
-const saveDraftEndpoint = computed(() =>
-  isNonRetail.value ? '/sales/non-retail/save-draft/' : '/pos/save-draft/',
-)
+const isDeliveryOrder = computed(() => route.name === 'sales-do-form')
+const isNonRetail = computed(() => route.name === 'sales-so-form' || isDeliveryOrder.value)
+const saveDraftEndpoint = computed(() => {
+  if (isDeliveryOrder.value) return '/sales/delivery-order/save-draft/'
+  if (isNonRetail.value) return '/sales/non-retail/save-draft/'
+  return '/pos/save-draft/'
+})
 
 const configLoading = ref(true)
 const configErr = ref('')
@@ -51,7 +54,8 @@ const partnerNotice = ref('')
 const confirmSaving = ref(false)
 const reopenSaving = ref(false)
 const appendMode = ref(true)
-const REPLACE_CONFIRM_TEXT = 'Are you sure to replace the existing items?'
+const REPLACE_CONFIRM_TEXT =
+  "Replace the lines already on this order? You can't auto-undo that here."
 const transactionErr = ref('')
 const productCategoryErr = ref('')
 const productErr = ref('')
@@ -195,7 +199,7 @@ async function loadProductsForCategory(categoryIdStr) {
     }
     products.value = await fetchAllPages('/products/', params)
   } catch {
-    productsErr.value = 'Failed to load products for this category.'
+    productsErr.value = 'Could not load products for this category.'
     products.value = []
   } finally {
     productsLoading.value = false
@@ -212,7 +216,7 @@ async function loadProjectsForPartner(partnerIdStr) {
   try {
     projects.value = await fetchAllPages('/projects/', { partner_id: partnerIdStr })
   } catch {
-    projectLoadErr.value = 'Failed to load projects for this customer.'
+    projectLoadErr.value = 'Could not load projects for this customer.'
     projects.value = []
   } finally {
     projectsLoading.value = false
@@ -245,15 +249,16 @@ onMounted(async () => {
     isRestaurant.value = Boolean(data.is_restaurant)
     isCustomerMaintained.value = data.is_customer_maintained === true
   } catch {
-    configErr.value = 'Failed to load main configuration.'
+    configErr.value = 'Could not load app config.'
     isRestaurant.value = false
     isCustomerMaintained.value = false
   }
 
   try {
-    categories.value = await fetchAllPages('/product-categories/')
+    const allCat = await fetchAllPages('/product-categories/')
+    categories.value = allCat.filter((c) => c.is_active !== false)
   } catch {
-    catalogErr.value = 'Failed to load product categories.'
+    catalogErr.value = 'Could not load categories.'
     categories.value = []
   }
 
@@ -261,9 +266,10 @@ onMounted(async () => {
     partnerLoadErr.value = ''
     partnersLoading.value = true
     try {
-      corporatePartners.value = await fetchAllPages('/partners/', { is_corporate: 'true' })
+      const allCorp = await fetchAllPages('/partners/', { is_corporate: 'true' })
+      corporatePartners.value = allCorp.filter((p) => p.is_active !== false)
     } catch {
-      partnerLoadErr.value = 'Failed to load corporate customers.'
+      partnerLoadErr.value = 'Could not load corporate customers.'
       corporatePartners.value = []
     } finally {
       partnersLoading.value = false
@@ -277,7 +283,7 @@ onMounted(async () => {
     ppnTax.value = taxes.find((t) => String(t.name || '').toLowerCase().includes('ppn')) ?? null
     if (isNonRetail.value) selectedTaxIds.value = []
   } catch {
-    ppnTaxLoadErr.value = 'Failed to load tax data from master.'
+    ppnTaxLoadErr.value = 'Could not load tax master data.'
     taxOptions.value = []
     ppnTax.value = null
   } finally {
@@ -318,13 +324,18 @@ async function handleOrderRouteChange(raw) {
   saveDraftApiErr.value = ''
   try {
     const { data: o } = await api.get(`/sales-orders/${id}/`)
-    if (isNonRetail.value && o.order_type && o.order_type !== 'non_retail') {
-      saveDraftApiErr.value = 'This page only supports non-retail sales orders.'
-      newSalesOrder()
-      return
-    }
-    if (!isNonRetail.value && o.order_type && o.order_type !== 'retail') {
-      saveDraftApiErr.value = 'This page only supports retail sales orders.'
+    const expectedOrderType = isDeliveryOrder.value
+      ? 'delivery_order'
+      : isNonRetail.value
+        ? 'non_retail'
+        : 'retail'
+    if (o.order_type && o.order_type !== expectedOrderType) {
+      saveDraftApiErr.value =
+        expectedOrderType === 'delivery_order'
+          ? 'This page only supports delivery orders.'
+          : expectedOrderType === 'non_retail'
+            ? 'This page only supports non-retail sales orders.'
+            : 'This page only supports retail sales orders.'
       newSalesOrder()
       return
     }
@@ -466,49 +477,49 @@ async function saveDraft() {
   clearDraftFieldErrors()
 
   if (draftResult.value?.state === 'confirmed' || draftResult.value?.state === 'paid') {
-    saveDraftApiErr.value = 'This order cannot be saved as draft.'
+    saveDraftApiErr.value = "Can't save this order as a draft anymore."
     return
   }
 
   const t = transactionAt.value
   if (!(t instanceof Date) || Number.isNaN(t.getTime())) {
-    transactionErr.value = 'Time transaction is required.'
+    transactionErr.value = 'Pick a date and time.'
     return
   }
 
   if (isNonRetail.value) {
     if (!selectedPartnerId.value) {
-      partnerIdErr.value = 'Customer is required.'
+      partnerIdErr.value = 'Pick a customer.'
       return
     }
     if (!selectedProjectId.value) {
-      projectIdErr.value = 'Project is required.'
+      projectIdErr.value = 'Pick a project.'
       return
     }
   }
 
   if (selectedCategoryId.value === '') {
-    productCategoryErr.value = 'Product category is required.'
+    productCategoryErr.value = 'Pick a product category.'
     return
   }
   if (selectedProductId.value === '') {
-    productErr.value = 'Product is required.'
+    productErr.value = 'Pick a product.'
     return
   }
 
   const qtyVal = parsedQuantity()
   if (qtyVal == null || qtyVal <= 0) {
-    quantityErr.value = 'Quantity is required (enter a positive number).'
+    quantityErr.value = 'Use a positive quantity.'
     return
   }
 
   const unitPriceVal = parsedUnitPrice()
   if (unitPriceVal == null) {
-    unitPriceErr.value = 'Unit price is required.'
+    unitPriceErr.value = 'Add a unit price.'
     return
   }
   if (unitPriceVal < 0) {
-    unitPriceErr.value = 'Unit price cannot be negative.'
+    unitPriceErr.value = "Unit price can't be negative."
     return
   }
 
@@ -516,18 +527,18 @@ async function saveDraft() {
   const prod = selectedProduct.value
 
   if (prod?.uom_id == null) {
-    uomErr.value = 'UOM is required (missing on product).'
+    uomErr.value = 'This product has no UOM on file.'
     return
   }
   if (!uomDisplay.value) {
-    uomErr.value = 'UOM is required.'
+    uomErr.value = 'UOM missing.'
     return
   }
 
   if (applyPpn.value && selectedTaxes.value.length === 0 && draftTaxIds.value.length === 0) {
     saveDraftApiErr.value = isNonRetail.value
-      ? 'Tax is selected but tax master data is missing.'
-      : 'PPN is checked but no PPN tax is loaded from master.'
+      ? 'Tax is on but we have no tax rows loaded.'
+      : 'PPN is on but no PPN tax came from master.'
     return
   }
 
@@ -565,7 +576,7 @@ async function saveDraft() {
   if (isNonRetail.value) {
     body.partner_id = Number(selectedPartnerId.value)
     body.project_id = Number(selectedProjectId.value)
-    body.order_type = 'non_retail'
+    body.order_type = isDeliveryOrder.value ? 'delivery_order' : 'non_retail'
   }
 
   saveDraftSaving.value = true
@@ -591,11 +602,11 @@ async function confirmSale() {
   confirmHint.value = ''
   const id = draftResult.value?.id
   if (!id) {
-    confirmHint.value = 'Save a draft first, then confirm.'
+    confirmHint.value = 'Save a draft first, then hit confirm.'
     return
   }
   if (draftResult.value?.state !== 'draft') {
-    confirmHint.value = 'This order is not a draft.'
+    confirmHint.value = "This isn't a draft anymore."
     return
   }
   confirmSaving.value = true
@@ -615,11 +626,11 @@ async function reopenSale() {
   const id = draftResult.value?.id
   if (!id) return
   if (draftResult.value?.state !== 'confirmed') {
-    confirmHint.value = 'Only confirmed orders can be reopened.'
+    confirmHint.value = 'Only confirmed orders can go back to draft.'
     return
   }
   const label = draftResult.value?.code || `#${id}`
-  const ok = confirm(`Reopen sales order ${label} and set it back to draft?`)
+  const ok = confirm(`Reopen ${label} as a draft?`)
   if (!ok) return
   reopenSaving.value = true
   try {
@@ -711,7 +722,7 @@ async function startAddItem() {
 async function deleteLine(line) {
   const orderId = draftResult.value?.id
   if (!orderId || draftResult.value?.state !== 'draft') return
-  if (!confirm(`Delete item "${line.product_name}" from this order?`)) return
+  if (!confirm(`Drop "${line.product_name}" from this order?`)) return
   saveDraftApiErr.value = ''
   try {
     const { data } = await api.post(`/sales-orders/${orderId}/delete-line/`, {
@@ -730,11 +741,38 @@ async function deleteLine(line) {
 
 <template>
   <div class="pos-page stack">
+    <section class="card erp-head">
+      <p class="erp-kicker">{{ isNonRetail ? 'Sales Workspace' : 'Retail Workspace' }}</p>
+      <div class="erp-title-row">
+        <h1 class="erp-title">
+          {{
+            isDeliveryOrder
+              ? 'Delivery Order Form'
+              : isNonRetail
+                ? 'Sales Order Form (Non Retail)'
+                : 'Point of Sale'
+          }}
+        </h1>
+        <span class="erp-chip">Fast entry • Accurate totals</span>
+      </div>
+      <p class="pos-page-subtitle muted">
+        Run transactions with a clear layout, explicit validation, and live order totals.
+      </p>
+    </section>
+
     <section class="pos-top">
       <div class="card pos-form-card">
         <div class="pos-form-header">
           <div class="pos-form-header-top">
-            <h2 class="h2">{{ isNonRetail ? 'Sales Order Form (Non Retail)' : 'Point of Sale' }}</h2>
+            <h2 class="h2">
+              {{
+                isDeliveryOrder
+                  ? 'Delivery Order Form'
+                  : isNonRetail
+                    ? 'Sales Order Form (Non Retail)'
+                    : 'Point of Sale'
+              }}
+            </h2>
             <button type="button" class="btn-new-order" @click="newSalesOrder">
               New Sales Order
             </button>
@@ -1124,6 +1162,11 @@ async function deleteLine(line) {
 <style scoped>
 .pos-page {
   max-width: 1200px;
+}
+
+.pos-page-subtitle {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
 }
 
 .stack-tight {

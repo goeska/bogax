@@ -66,7 +66,7 @@ function truncateVendorName(name, max = 15) {
 function formatDateOnlyIso(iso) {
   if (!iso) return '—'
   try {
-    return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(iso))
+    return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(iso))
   } catch {
     return String(iso)
   }
@@ -79,7 +79,7 @@ async function loadPurchaseOrders() {
     const rows = await fetchAllPages('/purchase-orders/')
     poOptions.value = rows.filter((r) => r.state === 'confirmed' || r.state === 'received')
   } catch (e) {
-    poErr.value = e.response?.data?.detail || e.message || 'Failed to load purchase orders.'
+    poErr.value = e.response?.data?.detail || e.message || 'Could not load purchase orders.'
     poOptions.value = []
   } finally {
     poLoading.value = false
@@ -94,7 +94,7 @@ async function loadPoDetail(id) {
     const { data } = await api.get(`/purchase-orders/${id}/`)
     poDetail.value = data
   } catch (e) {
-    formErr.value = e.response?.data?.detail || e.message || 'Failed to load purchase order detail.'
+    formErr.value = e.response?.data?.detail || e.message || 'Could not load PO detail.'
   }
 }
 
@@ -107,7 +107,7 @@ async function loadReceipts() {
       purchase_order_id: Number(selectedPoId.value),
     })
   } catch (e) {
-    formErr.value = e.response?.data?.detail || e.message || 'Failed to load receiving orders.'
+    formErr.value = e.response?.data?.detail || e.message || 'Could not load receipts.'
   } finally {
     receiptLoading.value = false
   }
@@ -117,28 +117,28 @@ async function saveReceipt() {
   formErr.value = ''
   hint.value = ''
   if (editingReceiptId.value != null && editingReceiptState.value !== 'draft') {
-    formErr.value = 'Only draft receiving orders can be edited.'
+    formErr.value = 'Only draft receipts are editable.'
     return
   }
   if (!selectedPoId.value) {
-    formErr.value = 'Purchase order is required.'
+    formErr.value = 'Pick a purchase order.'
     return
   }
   if (!selectedLineId.value) {
-    formErr.value = 'Purchase order line is required.'
+    formErr.value = 'Pick a PO line.'
     return
   }
   const qty = Number(quantityReceived.value)
   if (!Number.isFinite(qty) || qty <= 0) {
-    formErr.value = 'Quantity received must be greater than zero.'
+    formErr.value = 'Received qty has to be above zero.'
     return
   }
   if (outstandingQuantityValue.value != null && qty > outstandingQuantityValue.value) {
-    formErr.value = 'Invalid Quantity: Exceeds PO Balance.'
+    formErr.value = "That's more than what's left on the PO line."
     return
   }
   if (!receivedAt.value) {
-    formErr.value = 'Received date is required.'
+    formErr.value = 'Pick a received date.'
     return
   }
   saveLoading.value = true
@@ -150,10 +150,10 @@ async function saveReceipt() {
     }
     if (editingReceiptId.value != null) {
       await api.patch(`/receiving-orders/${editingReceiptId.value}/`, body)
-      hint.value = 'Good receipt draft updated.'
+      hint.value = 'Receipt draft updated.'
     } else {
       await api.post('/receiving-orders/', body)
-      hint.value = 'Good receipt draft saved.'
+      hint.value = 'Receipt draft saved.'
     }
     quantityReceived.value = ''
     editingReceiptId.value = null
@@ -167,7 +167,7 @@ async function saveReceipt() {
         ? JSON.stringify(e.response.data)
         : null) ||
       e.message ||
-      'Failed to save good receipt.'
+      'Could not save that receipt.'
   } finally {
     saveLoading.value = false
   }
@@ -196,12 +196,12 @@ async function loadReceiptForEdit(rawId) {
       ? new Date().toISOString().slice(0, 16)
       : new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
   } catch (e) {
-    formErr.value = e.response?.data?.detail || e.message || 'Failed to load receiving draft.'
+    formErr.value = e.response?.data?.detail || e.message || 'Could not load receipt draft.'
   }
 }
 
 async function removeReceipt(row) {
-  if (!confirm(`Delete receiving #${row.id}?`)) return
+  if (!confirm(`Trash receipt #${row.id}?`)) return
   deletingId.value = row.id
   formErr.value = ''
   hint.value = ''
@@ -209,7 +209,7 @@ async function removeReceipt(row) {
     await api.delete(`/receiving-orders/${row.id}/`)
     await loadReceipts()
   } catch (e) {
-    formErr.value = e.response?.data?.detail || e.message || 'Failed to delete receiving.'
+    formErr.value = e.response?.data?.detail || e.message || 'Could not delete receipt.'
   } finally {
     deletingId.value = null
   }
@@ -237,8 +237,14 @@ onMounted(async () => {
 
 <template>
   <div class="stack good-receipt-page">
-    <h2 class="h2">Good Receipt</h2>
-    <p class="muted">Post Goods Receipt by PO Line</p>
+    <section class="card erp-head">
+      <p class="erp-kicker">Receiving Form</p>
+      <div class="erp-title-row">
+        <h1 class="erp-title">Good Receipt</h1>
+        <span class="erp-chip">PO Line • Balance Check • Draft</span>
+      </div>
+      <p class="muted">Post Goods Receipt by PO Line</p>
+    </section>
 
     <section class="card stack">
       <h3 class="section-title">Form</h3>

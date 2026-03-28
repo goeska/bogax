@@ -1,0 +1,44 @@
+---
+description: ERP UI pattern for all Vue screens
+globs: frontend/src/**/*.vue
+alwaysApply: false
+---
+
+# ERP UI Patterns
+
+Gunakan pola UI ini untuk semua menu/halaman baru agar konsisten.
+
+## Page structure
+
+- Pakai root `div` dengan class `stack`.
+- Untuk halaman baru, gunakan header:
+  - `section.card.erp-head`
+  - `p.erp-kicker`
+  - `div.erp-title-row` berisi `h1.erp-title` + `span.erp-chip`
+- Untuk area form/list gunakan `div.card` terpisah.
+
+## Reusable classes (wajib diprioritaskan)
+
+- Form/layout: `form-row`, `field`, `field.grow`, `field.compact`, `field.medium`, `field.check`.
+- Tabel/list: `table-wrap`, `table`, `col-num`, `col-actions`, `pill`, `pill--yes`, `pill--no`.
+- Filter toolbar: `list-filters`, `filter-field`, `filter-input`, `filter-actions`.
+- Action/button: `btn-primary`, `btn-edit`, `btn-ghost`, `link-btn`, `link-btn danger`.
+
+## Consistency rules
+
+- Jangan pakai inline style (`style="..."`); selalu pindahkan ke class.
+- Jangan duplikasi style header per halaman jika sudah bisa pakai `erp-head` family.
+- Pertahankan density-aware spacing (comfortable/compact) dari CSS variable global.
+- Jika butuh variasi berbahaya (mis. destructive page), pakai `erp-head erp-head--danger`.
+
+## Example
+
+```vue
+<section class="card erp-head">
+  <p class="erp-kicker">Master Data</p>
+  <div class="erp-title-row">
+    <h1 class="erp-title">New Menu</h1>
+    <span class="erp-chip">Context</span>
+  </div>
+</section>
+```

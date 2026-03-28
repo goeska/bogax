@@ -44,7 +44,7 @@ def _upsert_vendor_partner(name: str, phone: str):
     name = (name or "").strip()
     phone = (phone or "").strip()
     if not name:
-        raise ValidationError({"vendor_name": "Vendor name is required."})
+        raise ValidationError({"vendor_name": "Add a vendor name."})
     name_norm = normalize_partner_name(name)
     phone_norm = normalize_partner_phone(phone)
     obj = Partner.objects.filter(name_norm=name_norm, phone_norm=phone_norm).first()
@@ -103,7 +103,9 @@ class PurchaseSaveDraftView(APIView):
                 .first()
             )
             if not po:
-                raise ValidationError({"purchase_order_id": "Draft not found or cannot be edited."})
+                raise ValidationError(
+                    {"purchase_order_id": "Can't find that draft or you can't edit it."}
+                )
             if not d.get("append_line") and not line_id:
                 po.lines.filter(is_active=True).update(is_active=False)
             po.partner = partner
@@ -123,7 +125,7 @@ class PurchaseSaveDraftView(APIView):
         if line_id:
             line = po.lines.filter(pk=line_id, is_active=True).first()
             if not line:
-                raise ValidationError({"purchase_order_line_id": "Line not found."})
+                raise ValidationError({"purchase_order_line_id": "Couldn't find that line."})
             line.product = product
             line.quantity = d["quantity"]
             line.unit_price = d["unit_price"]
@@ -139,14 +141,16 @@ class PurchaseSaveDraftView(APIView):
 
         tax_map = _purchase_tax_map(d.get("tax_ids", []))
         if d.get("tax_ids") and len(tax_map) != len(set(d.get("tax_ids", []))):
-            raise ValidationError({"tax_ids": "Only active PPN/PPH 21/22/23 taxes are allowed."})
+            raise ValidationError(
+                {"tax_ids": "Only active PPN / PPH 21 / 22 / 23 taxes work here."}
+            )
         for tax in tax_map.values():
             PurchaseOrderLineTax.objects.create(purchase_order_line=line, tax=tax)
 
         po.refresh_from_db()
         payload = PurchaseOrderReadSerializer(po).data
         if vendor_existed:
-            payload["vendor_notice"] = "Vendor already exists. Using existing data."
+            payload["vendor_notice"] = "We matched an existing vendor - using their profile."
         return Response(payload, status=status.HTTP_200_OK)
 
 
@@ -177,7 +181,7 @@ class PurchaseOrderViewSet(
             try:
                 pid = int(product_raw)
             except (TypeError, ValueError):
-                raise ValidationError({"product_id": "Invalid integer."})
+                raise ValidationError({"product_id": "That isn't a valid product id."})
             qs = qs.filter(lines__product_id=pid, lines__is_active=True).distinct()
         po_code_raw = (self.request.query_params.get("purchase_order_code") or "").strip()
         if po_code_raw:
@@ -185,7 +189,7 @@ class PurchaseOrderViewSet(
         start, end = parse_date_range_from_request(self.request)
         if start and end and start > end:
             raise ValidationError(
-                {"date_range": "Tanggal mulai harus sama atau sebelum tanggal akhir."}
+                {"date_range": "Start date can't be after the end date."}
             )
         if start:
             qs = qs.filter(time_transaction__gte=start)
@@ -195,7 +199,7 @@ class PurchaseOrderViewSet(
 
     def perform_destroy(self, instance):
         if instance.state != PurchaseOrder.State.DRAFT:
-            raise ValidationError({"detail": "Only draft orders can be deleted."})
+            raise ValidationError({"detail": "Only drafts can be deleted."})
         instance.is_active = False
         instance.save(update_fields=["is_active"])
 
@@ -207,7 +211,7 @@ class PurchaseOrderViewSet(
             pk=pk,
         )
         if po.state != PurchaseOrder.State.DRAFT:
-            raise ValidationError({"detail": "Only draft orders can be confirmed."})
+            raise ValidationError({"detail": "Only drafts can be confirmed."})
         po.state = PurchaseOrder.State.CONFIRMED
         po.save()
         po.refresh_from_db()
@@ -221,7 +225,7 @@ class PurchaseOrderViewSet(
             pk=pk,
         )
         if po.state != PurchaseOrder.State.CONFIRMED:
-            raise ValidationError({"detail": "Only confirmed orders can be reopened."})
+            raise ValidationError({"detail": "Only confirmed orders can go back to draft."})
         po.state = PurchaseOrder.State.DRAFT
         po.save(update_fields=["state", "update_at"])
         po.refresh_from_db()
@@ -260,14 +264,14 @@ class PurchaseOrderLineViewSet(viewsets.ReadOnlyModelViewSet):
             try:
                 pid = int(product_raw)
             except (TypeError, ValueError):
-                raise ValidationError({"product_id": "Invalid integer."})
+                raise ValidationError({"product_id": "That isn't a valid product id."})
             qs = qs.filter(product_id=pid)
         po_code_raw = (self.request.query_params.get("purchase_order_code") or "").strip()
         if po_code_raw:
             qs = qs.filter(purchase_order__code__icontains=po_code_raw)
         start, end = parse_date_range_from_request(self.request)
         if start and end and start > end:
-            raise ValidationError({"date_range": "Tanggal mulai harus sama atau sebelum tanggal akhir."})
+            raise ValidationError({"date_range": "Start date can't be after the end date."})
         if start:
             qs = qs.filter(purchase_order__time_transaction__gte=start)
         if end:
@@ -310,7 +314,7 @@ class ReceivingOrderViewSet(
             try:
                 order_id = int(order_id_raw)
             except (TypeError, ValueError):
-                raise ValidationError({"purchase_order_id": "Invalid integer."})
+                raise ValidationError({"purchase_order_id": "That isn't a valid PO id."})
             qs = qs.filter(purchase_order_line__purchase_order_id=order_id)
         order_code_raw = (self.request.query_params.get("purchase_order_code") or "").strip()
         if order_code_raw:
@@ -319,11 +323,11 @@ class ReceivingOrderViewSet(
         if state_raw:
             allowed_states = {"draft", "confirmed"}
             if state_raw not in allowed_states:
-                raise ValidationError({"state": "Invalid state. Use: draft or confirmed."})
+                raise ValidationError({"state": 'Filter with state=draft or state=confirmed.'})
             qs = qs.filter(state=state_raw)
         start, end = parse_date_range_from_request(self.request)
         if start and end and start > end:
-            raise ValidationError({"date_range": "Tanggal mulai harus sama atau sebelum tanggal akhir."})
+            raise ValidationError({"date_range": "Start date can't be after the end date."})
         if start:
             qs = qs.filter(received_date__gte=start)
         if end:
@@ -346,13 +350,15 @@ class ReceivingOrderViewSet(
             .first()
         )
         if not line:
-            raise ValidationError({"purchase_order_line_id": "Line not found."})
+            raise ValidationError({"purchase_order_line_id": "Couldn't find that line."})
         if line.purchase_order.state not in (
             PurchaseOrder.State.CONFIRMED,
             PurchaseOrder.State.RECEIVED,
         ):
             raise ValidationError(
-                {"detail": "Goods receipt is only allowed for confirmed or received purchase orders."}
+                {
+                    "detail": "Receiving only works on POs that are confirmed or already received."
+                }
             )
         obj = ReceivingOrder.objects.create(
             code=allocate_receiving_order_code(d.get("received_date") or line.purchase_order.time_transaction),
@@ -369,7 +375,7 @@ class ReceivingOrderViewSet(
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
         if instance.state != "draft":
-            raise ValidationError({"detail": "Only draft receiving orders can be edited."})
+            raise ValidationError({"detail": "You can only edit draft receipts."})
         ser = self.get_serializer(data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
@@ -385,7 +391,7 @@ class ReceivingOrderViewSet(
             .first()
         )
         if not line:
-            raise ValidationError({"purchase_order_line_id": "Line not found."})
+            raise ValidationError({"purchase_order_line_id": "Couldn't find that line."})
         instance.purchase_order_line_id = line.id
         if "quantity_received" in d:
             instance.quantity_received = d["quantity_received"]
@@ -399,7 +405,7 @@ class ReceivingOrderViewSet(
     def confirm(self, request, pk=None):
         obj = get_object_or_404(self._scope().select_for_update(of=("self",)), pk=pk)
         if obj.state != "draft":
-            raise ValidationError({"detail": "Only draft receiving orders can be confirmed."})
+            raise ValidationError({"detail": "Only draft receipts can be confirmed."})
         obj.state = "confirmed"
         obj.save(update_fields=["state", "update_at"])
         po = obj.purchase_order_line.purchase_order
@@ -413,13 +419,13 @@ class ReceivingOrderViewSet(
     def bulk_confirm(self, request):
         raw_ids = request.data.get("ids")
         if not isinstance(raw_ids, list) or not raw_ids:
-            raise ValidationError({"ids": "Provide a non-empty list of ids."})
+            raise ValidationError({"ids": "Send a non-empty list of ids."})
         ids = []
         for v in raw_ids:
             try:
                 ids.append(int(v))
             except (TypeError, ValueError):
-                raise ValidationError({"ids": "All ids must be integers."})
+                raise ValidationError({"ids": "Every id has to be a whole number."})
         qs = self._scope().select_for_update(of=("self",)).filter(pk__in=ids)
         requested = len(ids)
         found = qs.count()
@@ -444,6 +450,6 @@ class ReceivingOrderViewSet(
 
     def perform_destroy(self, instance):
         if instance.state != "draft":
-            raise ValidationError({"detail": "Only draft receiving orders can be deleted."})
+            raise ValidationError({"detail": "You can only delete draft receipts."})
         instance.is_active = False
         instance.save(update_fields=["is_active", "update_at"])

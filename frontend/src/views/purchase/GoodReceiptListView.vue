@@ -55,7 +55,7 @@ async function load(page = 1) {
         ? JSON.stringify(e.response.data)
         : null) ||
       e.message ||
-      'Failed to load good receipts.'
+      'Could not load receipts.'
     rows.value = []
     totalCount.value = 0
   } finally {
@@ -88,7 +88,7 @@ function clearFilters() {
 }
 
 async function removeRow(row) {
-  if (!confirm(`Delete receiving #${row.id}?`)) return
+  if (!confirm(`Trash receipt #${row.id}?`)) return
   deletingId.value = row.id
   err.value = ''
   try {
@@ -101,7 +101,7 @@ async function removeRow(row) {
         ? JSON.stringify(e.response.data)
         : null) ||
       e.message ||
-      'Failed to delete.'
+      'Could not delete.'
   } finally {
     deletingId.value = null
   }
@@ -120,7 +120,7 @@ async function confirmRow(row) {
         ? JSON.stringify(e.response.data)
         : null) ||
       e.message ||
-      'Failed to confirm.'
+      'Could not confirm.'
   } finally {
     confirmingId.value = null
   }
@@ -145,7 +145,7 @@ const allDraftSelectedOnPage = computed(
 
 async function bulkConfirmSelected() {
   if (selectedDraftIds.value.length === 0) return
-  if (!confirm(`Confirm ${selectedDraftIds.value.length} selected draft receipts?`)) return
+  if (!confirm(`Confirm ${selectedDraftIds.value.length} draft receipts?`)) return
   bulkConfirming.value = true
   err.value = ''
   try {
@@ -164,7 +164,7 @@ async function bulkConfirmSelected() {
         ? JSON.stringify(e.response.data)
         : null) ||
       e.message ||
-      'Failed to bulk confirm.'
+      'Could not bulk confirm.'
   } finally {
     bulkConfirming.value = false
   }
@@ -188,8 +188,14 @@ onMounted(async () => {
 
 <template>
   <div class="stack good-receipt-list-page">
-    <h2 class="h2">Good Receipt List</h2>
-    <p class="muted lead">List data receiving barang dari table receiving_order.</p>
+    <section class="card erp-head">
+      <p class="erp-kicker">Receiving Control</p>
+      <div class="erp-title-row">
+        <h1 class="erp-title">Good Receipt List</h1>
+        <span class="erp-chip">Draft • Confirm • Bulk Confirm</span>
+      </div>
+      <p class="muted lead">List of goods receipts from receiving orders.</p>
+    </section>
 
     <div class="list-filters">
       <label class="filter-field">
@@ -321,26 +327,41 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.good-receipt-list-page { max-width: 1200px; }
-.lead { margin: -0.25rem 0 1rem; font-size: 0.95rem; }
+.good-receipt-list-page {
+  max-width: 1200px;
+  gap: 0.7rem;
+}
+
+.lead {
+  margin: 0.1rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
 .list-filters {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.75rem 1rem;
-  margin-bottom: 1rem;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  gap: 0.55rem 0.8rem;
+  margin-bottom: 0.4rem;
+  padding: 0.68rem 0.8rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: #fbfdff;
 }
 .filter-field {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
   font-size: 0.85rem;
 }
-.filter-field span { color: var(--muted); }
-.filter-input { min-width: 10rem; padding: 0.35rem 0.5rem; font-size: 0.9rem; }
-.filter-actions { display: flex; gap: 0.5rem; align-items: center; }
+.filter-field span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.15;
+}
+.filter-input { min-width: 9.2rem; padding: 0.42rem 0.56rem; font-size: 0.86rem; }
+.filter-actions { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
 .btn-confirm-selected { border: 1px solid #2563eb; }
 .table-wrap { overflow-x: auto; }
 .good-receipt-table .col-check { width: 2.2rem; text-align: center; }

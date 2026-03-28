@@ -33,6 +33,26 @@ class Partner(models.Model):
     is_customer = models.BooleanField(default=False, db_index=True)
     is_vendor = models.BooleanField(default=False, db_index=True)
     is_active = models.BooleanField(default=True, db_index=True)
+    parent = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        db_column="parent_id",
+        related_name="child_partners",
+    )
+    tax_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name="Tax ID (NPWP)",
+    )
+    tax_id_norm = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        editable=False,
+    )
 
     class Meta:
         db_table = "partner"
@@ -41,6 +61,22 @@ class Partner(models.Model):
                 fields=["name_norm", "phone_norm"],
                 name="unique_partner_name_norm_phone_norm",
             ),
+            models.UniqueConstraint(
+                fields=["name_norm", "is_corporate"],
+                name="unique_name_norm_corporate",
+                violation_error_message=(
+                    "That name’s already taken for this partner type "
+                    "(corporate vs non-corporate) — try another one."
+                ),
+            ),
+            models.UniqueConstraint(
+                fields=["tax_id_norm"],
+                name="unique_partner_tax_id_norm",
+                condition=models.Q(tax_id_norm__isnull=False),
+                violation_error_message=(
+                    "This Tax ID (NPWP) is already registered to another partner."
+                ),
+            ),
         ]
 
     def save(self, *args, **kwargs):
@@ -48,6 +84,14 @@ class Partner(models.Model):
             self.is_corporate = True
         self.name_norm = (self.name or "").strip().lower()
         self.phone_norm = (self.phone or "").strip()
+        tid = self.tax_id
+        if tid is None or str(tid).strip() == "":
+            self.tax_id = None
+            self.tax_id_norm = None
+        else:
+            raw = str(tid).strip()
+            self.tax_id = raw
+            self.tax_id_norm = raw.lower()
         update_fields = kwargs.get("update_fields")
         if update_fields is not None:
             update_fields = set(update_fields)
@@ -60,6 +104,8 @@ class Partner(models.Model):
                 update_fields.add("name_norm")
             if "phone" in update_fields:
                 update_fields.add("phone_norm")
+            if "tax_id" in update_fields:
+                update_fields.add("tax_id_norm")
             kwargs["update_fields"] = list(update_fields)
         super().save(*args, **kwargs)
 

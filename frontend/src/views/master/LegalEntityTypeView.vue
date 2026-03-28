@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api } from '../../api/client'
 import { deactivateErrorMessage, softDeactivate } from '../../api/softDeactivate'
 import { extractApiErrorText } from '../../utils/apiError'
@@ -11,6 +11,15 @@ const saving = ref(false)
 const editingId = ref(null)
 
 const form = ref({ code: '', name: '', is_active: true })
+
+/** 'active' = active types only; 'inactive' = soft-deleted / inactive, editable back to active */
+const listTab = ref('active')
+
+const activeRows = computed(() => rows.value.filter((r) => r.is_active !== false))
+const inactiveRows = computed(() => rows.value.filter((r) => r.is_active === false))
+const displayedRows = computed(() =>
+  listTab.value === 'active' ? activeRows.value : inactiveRows.value,
+)
 
 function resetForm() {
   editingId.value = null
@@ -24,7 +33,7 @@ async function load() {
     const { data } = await api.get('/legal-entity-types/')
     rows.value = data.results ?? data
   } catch {
-    err.value = 'Could not load legal entity types. Please try again.'
+    err.value = 'Could not load legal entity types.'
     rows.value = []
   } finally {
     loading.value = false
@@ -50,8 +59,8 @@ async function submit() {
       name: String(form.value.name || '').trim(),
       is_active: !!form.value.is_active,
     }
-    if (!payload.code) throw new Error('Code is required.')
-    if (!payload.name) throw new Error('Name is required.')
+    if (!payload.code) throw new Error('Add a code.')
+    if (!payload.name) throw new Error('Add a name.')
 
     if (editingId.value != null) {
       await api.patch(`/legal-entity-types/${editingId.value}/`, payload)
@@ -68,13 +77,12 @@ async function submit() {
       msg.includes('code') &&
       (msg.includes('already exists') ||
         msg.includes('unique') ||
-        msg.includes('duplicate') ||
-        msg.includes('telah ada'))
+        msg.includes('duplicate'))
 
     if (looksLikeDuplicateCode) {
-      err.value = 'That code already exists. Please use a different one.'
+      err.value = "That code's taken - try another."
     } else {
-      err.value = raw || e.message || 'Could not save. Please try again.'
+      err.value = raw || e.message || 'Could not save - try again.'
     }
   } finally {
     saving.value = false
@@ -98,6 +106,36 @@ onMounted(load)
 
 <template>
   <div class="stack">
+    <section class="card erp-head">
+      <p class="erp-kicker">Master Data</p>
+      <div class="erp-title-row let-head-row">
+        <h1 class="erp-title">Legal Entity Type</h1>
+        <div class="let-tab-switch" role="tablist" aria-label="Legal entity type scope">
+          <button
+            type="button"
+            role="tab"
+            class="let-tab"
+            :class="{ 'is-active': listTab === 'active' }"
+            :aria-selected="listTab === 'active'"
+            @click="listTab = 'active'"
+          >
+            Active types
+          </button>
+          <button
+            type="button"
+            role="tab"
+            class="let-tab"
+            :class="{ 'is-active': listTab === 'inactive' }"
+            :aria-selected="listTab === 'inactive'"
+            @click="listTab = 'inactive'"
+          >
+            Non Active Type
+          </button>
+        </div>
+      </div>
+      <p class="muted">Classification of your organization's legal status.</p>
+    </section>
+
     <div class="card">
       <h2 class="h2">{{ editingId != null ? 'Edit Legal Entity Type' : 'Add Legal Entity Type' }}</h2>
       <form class="form-row" @submit.prevent="submit">
@@ -124,8 +162,16 @@ onMounted(load)
     </div>
 
     <div class="card">
-      <h2 class="h2">Legal Entity Type List</h2>
+      <h2 class="h2">
+        {{ listTab === 'active' ? 'Active types' : 'Non active types' }}
+      </h2>
+      <p v-if="listTab === 'inactive'" class="muted let-tab-hint">
+        Edit a row and turn <strong>Active</strong> on, then save to use it again for corporate partners.
+      </p>
       <div v-if="loading" class="muted">Loading…</div>
+      <div v-else-if="displayedRows.length === 0" class="muted">
+        {{ listTab === 'active' ? 'No active legal entity types yet.' : 'No inactive types.' }}
+      </div>
       <div v-else class="table-wrap">
         <table class="table">
           <thead>
@@ -137,7 +183,7 @@ onMounted(load)
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in rows" :key="row.id">
+            <tr v-for="row in displayedRows" :key="row.id">
               <td>{{ row.code }}</td>
               <td>{{ row.name }}</td>
               <td>
@@ -147,7 +193,14 @@ onMounted(load)
               </td>
               <td class="col-actions">
                 <button type="button" class="link-btn" @click="startEdit(row)">Edit</button>
-                <button type="button" class="link-btn danger" @click="remove(row)">Delete</button>
+                <button
+                  v-if="listTab === 'active'"
+                  type="button"
+                  class="link-btn danger"
+                  @click="remove(row)"
+                >
+                  Delete
+                </button>
               </td>
             </tr>
           </tbody>
@@ -158,6 +211,47 @@ onMounted(load)
 </template>
 
 <style scoped>
+.let-head-row {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+}
+
+.let-tab-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.let-tab {
+  border: 1px solid #d4e0f3;
+  background: #fff;
+  color: #334155;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  padding: 0.28rem 0.72rem;
+  cursor: pointer;
+}
+
+.let-tab:hover {
+  border-color: #bfd2ee;
+  background: #f8fbff;
+}
+
+.let-tab.is-active {
+  border-color: #60a5fa;
+  background: #eaf3ff;
+  color: #1e40af;
+}
+
+.let-tab-hint {
+  margin: -0.35rem 0 0.65rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
 .table-wrap {
   overflow-x: auto;
 }

@@ -2,8 +2,8 @@ from datetime import datetime, timedelta
 from datetime import time as time_cls
 
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import transaction
-from django.db.models import DecimalField, F, Sum
+from django.db import IntegrityError, transaction
+from django.db.models import DecimalField, F, Q, Sum
 from django.db.models.functions import TruncDate
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -23,12 +23,28 @@ from master.models import Product, TableNumber, Tax
 from .models import Partner, Project, SalesOrder, SalesOrderLine, SalesOrderLineTax
 from .partner_normalization import normalize_partner_name, normalize_partner_phone
 from .serializers import (
+    PARTNER_DUPLICATE_NAME_ERROR,
+    PARTNER_DUPLICATE_TAX_ID_ERROR,
     PartnerSerializer,
     PosSaveDraftSerializer,
     ProjectSerializer,
     SalesOrderLineListSerializer,
     SalesOrderReadSerializer,
 )
+
+
+def _partner_integrity_validation_error(err):
+    """Map DB unique violations to DRF field errors (PostgreSQL constraint names)."""
+    s = str(err).lower()
+    if (
+        "tax_id" in s
+        or "unique_partner_tax_id" in s
+        or "unique_partner_tax_id_norm" in s
+    ):
+        return ValidationError({"tax_id": PARTNER_DUPLICATE_TAX_ID_ERROR})
+    if "unique_name_norm_corporate" in s or "unique_name_corporate" in s:
+        return ValidationError({"name": PARTNER_DUPLICATE_NAME_ERROR})
+    return None
 
 
 class PartnerViewSet(SoftDeactivateDestroyMixin, viewsets.ModelViewSet):
@@ -40,14 +56,51 @@ class PartnerViewSet(SoftDeactivateDestroyMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        # Keep SoftDeactivateDestroyMixin behaviour (active-only) + keep ordering.
-        qs = super().get_queryset().order_by("name", "phone", "id")
+        # Include inactive partners for master UI (active / non-active tabs + reactivate PATCH).
+        qs = super(SoftDeactivateDestroyMixin, self).get_queryset().order_by("name", "phone", "id")
         corp_raw = (self.request.query_params.get("is_corporate") or "").strip()
         if corp_raw in ("1", "true", "True", "yes", "on"):
             qs = qs.filter(is_corporate=True)
         elif corp_raw in ("0", "false", "False", "no", "off"):
             qs = qs.filter(is_corporate=False)
-        return qs
+
+        active_raw = (self.request.query_params.get("is_active") or "").strip().lower()
+        if active_raw in ("1", "true", "yes", "on"):
+            qs = qs.filter(is_active=True)
+        elif active_raw in ("0", "false", "no", "off"):
+            qs = qs.filter(is_active=False)
+
+        search_raw = (self.request.query_params.get("search") or "").strip()
+        if search_raw:
+            qs = qs.filter(
+                Q(name__icontains=search_raw)
+                | Q(phone__icontains=search_raw)
+                | Q(address__icontains=search_raw)
+                | Q(tax_id__icontains=search_raw)
+                | Q(parent__name__icontains=search_raw)
+                | Q(legal_entity_type__code__icontains=search_raw)
+                | Q(legal_entity_type__name__icontains=search_raw)
+            )
+
+        return qs.select_related("parent", "legal_entity_type")
+
+    def perform_create(self, serializer):
+        try:
+            return super().perform_create(serializer)
+        except IntegrityError as e:
+            mapped = _partner_integrity_validation_error(e)
+            if mapped is not None:
+                raise mapped from e
+            raise
+
+    def perform_update(self, serializer):
+        try:
+            return super().perform_update(serializer)
+        except IntegrityError as e:
+            mapped = _partner_integrity_validation_error(e)
+            if mapped is not None:
+                raise mapped from e
+            raise
 
 
 class SalesOrderLineViewSet(viewsets.ReadOnlyModelViewSet):
@@ -72,7 +125,7 @@ class SalesOrderLineViewSet(viewsets.ReadOnlyModelViewSet):
             try:
                 pid = int(product_raw)
             except (TypeError, ValueError):
-                raise ValidationError({"product_id": "Invalid integer."})
+                raise ValidationError({"product_id": "That isn't a valid product id."})
             qs = qs.filter(product_id=pid)
         code_raw = (self.request.query_params.get("sales_order_code") or "").strip()
         if code_raw:
@@ -83,7 +136,7 @@ class SalesOrderLineViewSet(viewsets.ReadOnlyModelViewSet):
         start, end = parse_date_range_from_request(self.request)
         if start and end and start > end:
             raise ValidationError(
-                {"date_range": "Tanggal mulai harus sama atau sebelum tanggal akhir."}
+                {"date_range": "Start date can't be after the end date."}
             )
         if start:
             qs = qs.filter(sales_order__time_transaction__gte=start)
@@ -107,7 +160,7 @@ class ProjectViewSet(SoftDeactivateDestroyMixin, viewsets.ModelViewSet):
             try:
                 pid = int(partner_raw)
             except (TypeError, ValueError):
-                raise ValidationError({"partner_id": "Invalid integer."})
+                raise ValidationError({"partner_id": "That isn't a valid partner id."})
             qs = qs.filter(partner_id=pid)
         return qs
 
@@ -136,10 +189,10 @@ def _resolve_table(table_raw: str):
     try:
         n = int(table_raw)
     except ValueError:
-        raise ValidationError({"table": "Use a numeric table number."})
+        raise ValidationError({"table": "Table has to be a number."})
     t = TableNumber.objects.filter(name=n, is_active=True).first()
     if not t:
-        raise ValidationError({"table": "Table not found or inactive."})
+        raise ValidationError({"table": "No active table with that number."})
     return t
 
 
@@ -199,8 +252,10 @@ class PosSaveDraftView(APIView):
 
     def _resolve_order_type(self, validated_data):
         raw = (self.forced_order_type or validated_data.get("order_type") or "retail").strip()
-        if raw not in ("retail", "non_retail"):
-            raise ValidationError({"order_type": 'Expected "retail" or "non_retail".'})
+        if raw not in ("retail", "non_retail", "delivery_order"):
+            raise ValidationError(
+                {"order_type": 'Use "retail", "non_retail", or "delivery_order".'}
+            )
         return raw
 
     @transaction.atomic
@@ -215,7 +270,7 @@ class PosSaveDraftView(APIView):
         if d.get("partner_id"):
             partner = Partner.objects.filter(pk=d["partner_id"], is_active=True).first()
             if not partner:
-                raise ValidationError({"partner_id": "Partner not found or inactive."})
+                raise ValidationError({"partner_id": "That customer isn't there or is inactive."})
         else:
             partner, partner_existed = _upsert_partner_for_sales(
                 d.get("customer_name", ""),
@@ -226,18 +281,24 @@ class PosSaveDraftView(APIView):
         if d.get("project_id"):
             project_obj = Project.objects.filter(pk=d["project_id"], is_active=True).first()
             if not project_obj:
-                raise ValidationError({"project_id": "Project not found or inactive."})
+                raise ValidationError({"project_id": "That project isn't there or is inactive."})
 
-        if order_type == "non_retail":
+        if order_type in ("non_retail", "delivery_order"):
             if not partner:
-                raise ValidationError({"partner_id": "Required for non-retail orders."})
+                raise ValidationError(
+                    {"partner_id": "You need a customer for this order type."}
+                )
             if not partner.is_corporate:
-                raise ValidationError({"partner_id": "Customer must be a corporate partner."})
+                raise ValidationError(
+                    {"partner_id": "This flow needs a corporate customer."}
+                )
             if not project_obj:
-                raise ValidationError({"project_id": "Required for non-retail orders."})
+                raise ValidationError(
+                    {"project_id": "You need a project for this order type."}
+                )
             if project_obj.partner_id != partner.id:
                 raise ValidationError(
-                    {"project_id": "Project must belong to the selected customer."}
+                    {"project_id": "That project doesn't go with this customer."}
                 )
 
         table_obj = _resolve_table(d.get("table", ""))
@@ -259,7 +320,7 @@ class PosSaveDraftView(APIView):
             )
             if not so:
                 raise ValidationError(
-                    {"sales_order_id": "Draft not found or cannot be edited."}
+                    {"sales_order_id": "Can't find that draft or you can't edit it."}
                 )
             if not d.get("append_line") and not line_id:
                 so.lines.filter(is_active=True).update(is_active=False)
@@ -286,7 +347,7 @@ class PosSaveDraftView(APIView):
         if line_id:
             line = so.lines.filter(pk=line_id, is_active=True).first()
             if not line:
-                raise ValidationError({"sales_order_line_id": "Line not found."})
+                raise ValidationError({"sales_order_line_id": "Couldn't find that line."})
             line.product = product
             line.quantity = d["quantity"]
             line.unit_price = d["unit_price"]
@@ -307,20 +368,27 @@ class PosSaveDraftView(APIView):
             found_ids = {t.id for t in taxes}
             invalid_ids = [tid for tid in tax_ids if tid not in found_ids]
             if invalid_ids:
-                raise ValidationError({"tax_ids": f"Invalid or inactive tax ids: {invalid_ids}"})
+                raise ValidationError(
+                    {"tax_ids": f"These taxes aren't valid or active: {invalid_ids}"}
+                )
             for tax in taxes:
                 SalesOrderLineTax.objects.create(sales_order_line=line, tax=tax)
 
         so.refresh_from_db()
         payload = SalesOrderReadSerializer(so).data
         if partner_existed:
-            payload["customer_notice"] = "Customer already exists. Using existing data."
+            payload["customer_notice"] = "We matched an existing customer - using their profile."
         return Response(payload, status=status.HTTP_200_OK)
 
 
 class NonRetailSaveDraftView(PosSaveDraftView):
     permission_classes = (permissions.IsAuthenticated,)
     forced_order_type = "non_retail"
+
+
+class DeliveryOrderSaveDraftView(PosSaveDraftView):
+    permission_classes = (permissions.IsAuthenticated,)
+    forced_order_type = "delivery_order"
 
 
 class SalesOrderViewSet(
@@ -353,7 +421,7 @@ class SalesOrderViewSet(
             try:
                 pid = int(product_raw)
             except (TypeError, ValueError):
-                raise ValidationError({"product_id": "Invalid integer."})
+                raise ValidationError({"product_id": "That isn't a valid product id."})
             qs = qs.filter(lines__product_id=pid, lines__is_active=True).distinct()
         so_code_raw = (self.request.query_params.get("sales_order_code") or "").strip()
         if so_code_raw:
@@ -364,7 +432,7 @@ class SalesOrderViewSet(
         start, end = parse_date_range_from_request(self.request)
         if start and end and start > end:
             raise ValidationError(
-                {"date_range": "Tanggal mulai harus sama atau sebelum tanggal akhir."}
+                {"date_range": "Start date can't be after the end date."}
             )
         if start:
             qs = qs.filter(time_transaction__gte=start)
@@ -374,7 +442,7 @@ class SalesOrderViewSet(
 
     def perform_destroy(self, instance):
         if instance.state != SalesOrder.State.DRAFT:
-            raise ValidationError({"detail": "Only draft orders can be deleted."})
+            raise ValidationError({"detail": "Only drafts can be deleted."})
         instance.is_active = False
         instance.save(update_fields=["is_active"])
 
@@ -389,7 +457,7 @@ class SalesOrderViewSet(
             pk=pk,
         )
         if so.state != SalesOrder.State.DRAFT:
-            raise ValidationError({"detail": "Only draft orders can be confirmed."})
+            raise ValidationError({"detail": "Only drafts can be confirmed."})
         so.state = SalesOrder.State.CONFIRMED
         so.save()
         so.refresh_from_db()
@@ -404,7 +472,7 @@ class SalesOrderViewSet(
             pk=pk,
         )
         if so.state != SalesOrder.State.CONFIRMED:
-            raise ValidationError({"detail": "Only confirmed orders can be reopened."})
+            raise ValidationError({"detail": "Only confirmed orders can go back to draft."})
         so.state = SalesOrder.State.DRAFT
         so.save()
         so.refresh_from_db()
@@ -418,15 +486,15 @@ class SalesOrderViewSet(
             pk=pk,
         )
         if so.state != SalesOrder.State.DRAFT:
-            raise ValidationError({"detail": "Only draft orders can be edited."})
+            raise ValidationError({"detail": "You can only change lines on drafts."})
         line_id = request.data.get("sales_order_line_id")
         try:
             line_id = int(line_id)
         except (TypeError, ValueError):
-            raise ValidationError({"sales_order_line_id": "Required integer id."})
+            raise ValidationError({"sales_order_line_id": "Send a numeric line id."})
         line = so.lines.filter(pk=line_id, is_active=True).first()
         if not line:
-            raise ValidationError({"sales_order_line_id": "Line not found."})
+            raise ValidationError({"sales_order_line_id": "Couldn't find that line."})
         line.is_active = False
         line.save(update_fields=["is_active", "update_at"])
         so.refresh_from_db()
@@ -598,7 +666,7 @@ class SalesDashboardStackedAreaView(APIView):
             start_d, end_d = _calendar_month_bounds_local()
         else:
             raise ValidationError(
-                {"period": 'Expected "week" or "month".'},
+                {"period": 'Use period=week or period=month.'},
             )
 
         raw_inc = (request.query_params.get("include_taxes") or "").strip().lower()
@@ -665,7 +733,7 @@ class ClearSalesDevelopmentDataView(APIView):
 
         return Response(
             {
-                "detail": "Sales development data cleared.",
+                "detail": "Sales dev data wiped - counters reset too.",
                 "deleted": deleted,
             },
             status=status.HTTP_200_OK,

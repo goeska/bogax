@@ -42,7 +42,7 @@ async function load(page = 1) {
     })
     applyDrfResponse(data, rows, page)
   } catch (e) {
-    err.value = e.response?.data?.detail || e.message || 'Failed to load sales order lines.'
+    err.value = e.response?.data?.detail || e.message || 'Could not load SO lines.'
     rows.value = []
     totalCount.value = 0
   } finally {
@@ -102,8 +102,14 @@ onMounted(async () => {
 
 <template>
   <div class="stack sales-order-line-page">
-    <h2 class="h2">SO Item List</h2>
-    <p class="muted lead">All transaction lines from sales orders.</p>
+    <section class="card erp-head so-line-head">
+      <p class="erp-kicker">Sales Analytics</p>
+      <div class="erp-title-row">
+        <h1 class="erp-title">SO Item List</h1>
+        <span class="erp-chip">Filter • Tax • Totals</span>
+      </div>
+      <p class="muted lead">All transaction lines from sales orders.</p>
+    </section>
 
     <div class="list-filters">
       <label class="filter-field">
@@ -188,11 +194,22 @@ onMounted(async () => {
 <style scoped>
 .sales-order-line-page {
   max-width: 1300px;
+  gap: 0.7rem;
+}
+
+.so-line-head {
+  min-height: 0;
+  padding-top: 0.8rem;
+  padding-bottom: 0.78rem;
+  display: grid;
+  align-content: start;
+  gap: 0.28rem;
 }
 
 .lead {
-  margin: -0.25rem 0 1rem;
-  font-size: 0.95rem;
+  margin: 0.08rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
 }
 
 .list-filters {
@@ -200,7 +217,7 @@ onMounted(async () => {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 0.75rem 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.4rem;
   padding: 0.85rem;
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 12px;
